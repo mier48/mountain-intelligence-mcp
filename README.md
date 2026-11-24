@@ -96,6 +96,7 @@ y solo los puertos 80/443 abiertos. Lo añaden dos ficheros sobre el `compose.ya
 | Fichero | Qué hace |
 |---|---|
 | [`compose.prod.yaml`](compose.prod.yaml) | Añade **Caddy** (TLS, único servicio publicado), deja de publicar el puerto 8000, arranca el MCP con `--proxy-headers` y deriva `MCP_ALLOWED_HOSTS` del dominio |
+| [`compose.proxy.yaml`](compose.proxy.yaml) | Alternativa a `compose.prod.yaml` si el VPS ya tiene un proxy en 80/443: sin Caddy, MCP en `127.0.0.1` tras tu proxy ([paso 6b](#6b-si-el-vps-ya-tiene-otro-proxy-en-80443)) |
 | [`deploy/Caddyfile`](deploy/Caddyfile) | Proxy solo para `/mcp` y `/healthz` (el resto 404), HSTS, límite de cuerpo 1 MB, logs JSON |
 | [`deploy/backup.sh`](deploy/backup.sh) | Copia diaria de PostgreSQL verificada con `pg_restore --list` y retención |
 
@@ -219,6 +220,95 @@ docker compose exec mountain-intelligence-mcp python manage.py seed_demo_data
 El primer arranque tarda unos minutos (compilación de la imagen). Caddy pide el certificado en cuanto arranca;
 sigue el proceso con `docker compose logs -f caddy` (busca `certificate obtained successfully`).
 
+### 6b. Si el VPS ya tiene otro proxy en 80/443
+
+Si `docker compose up` falla con `Bind for 0.0.0.0:80 failed: port is already allocated`, otro servicio del
+VPS (un nginx, Caddy, Traefik o Nginx Proxy Manager que sirve tus otros proyectos) ya tiene los puertos. Dos
+proxies no pueden compartir el 80/443, así que en ese caso **no se levanta Caddy**: el proxy existente termina
+TLS para `mountain-mcp.ltrapi.com` y reenvía al MCP. Averigua quién los ocupa:
+
+```bash
+docker ps --filter publish=80 --filter publish=443 --format '{{.Names}}\t{{.Image}}\t{{.Ports}}'
+sudo ss -ltnp '( sport = :80 or sport = :443 )'      # si no es un contenedor
+```
+
+1. En `.env`, cambia el overlay (y `MCP_PUBLISHED_PORT` si el 8000 del host también está ocupado):
+
+   ```dotenv
+   COMPOSE_FILE=compose.yaml:compose.proxy.yaml
+   MCP_PUBLISHED_PORT=8000
+   ```
+
+   [`compose.proxy.yaml`](compose.proxy.yaml) no arranca Caddy, deja el MCP en `127.0.0.1:MCP_PUBLISHED_PORT`
+   (inaccesible desde fuera), lo arranca con `--proxy-headers` y deriva `MCP_ALLOWED_HOSTS` del dominio.
+
+2. Aplica y elimina el contenedor de Caddy que quedó a medio crear:
+
+   ```bash
+   docker compose up -d --build --wait --remove-orphans
+   curl -s http://127.0.0.1:8000/healthz -H 'Host: mountain-mcp.ltrapi.com'   # {"status": "ok"}
+   ```
+
+3. Añade el sitio al proxy existente. Expón solo `/mcp` y `/healthz`, desactiva el buffering (las respuestas
+   van en streaming) y limita el cuerpo a 1 MB, como hace `deploy/Caddyfile`.
+
+   **nginx en el host** (`/etc/nginx/sites-available/mountain-mcp.ltrapi.com`, enlázalo en `sites-enabled`):
+
+   ```nginx
+   server {
+       listen 80;
+       server_name mountain-mcp.ltrapi.com;
+
+       location ~ ^/(mcp(/.*)?|healthz)$ {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_http_version 1.1;
+           proxy_set_header Host $host;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_buffering off;
+           proxy_cache off;
+           proxy_read_timeout 300s;
+           client_max_body_size 1m;
+       }
+       location / { return 404; }
+   }
+   ```
+
+   Después: `sudo nginx -t && sudo systemctl reload nginx && sudo certbot --nginx -d mountain-mcp.ltrapi.com`.
+
+   **Caddy en el host** (añádelo a su Caddyfile y `sudo systemctl reload caddy`):
+
+   ```caddyfile
+   mountain-mcp.ltrapi.com {
+   	@mcp path /mcp /mcp/* /healthz
+   	handle @mcp {
+   		request_body {
+   			max_size 1MB
+   		}
+   		reverse_proxy 127.0.0.1:8000 {
+   			flush_interval -1
+   		}
+   	}
+   	handle {
+   		respond "Not found" 404
+   	}
+   }
+   ```
+
+   **Proxy en un contenedor** (Traefik, Nginx Proxy Manager, nginx-proxy…): desde dentro de su contenedor
+   `127.0.0.1` no es el host. Conéctalo a la red del proyecto y usa como destino `mountain-intelligence-mcp:8000`:
+
+   ```bash
+   docker network connect mountain-intelligence-mcp_public <contenedor-del-proxy>
+   ```
+
+   En Nginx Proxy Manager: *Proxy Host* → dominio `mountain-mcp.ltrapi.com`, *Forward Hostname*
+   `mountain-intelligence-mcp`, puerto `8000`, certificado SSL de Let's Encrypt con *Force SSL*. La conexión
+   de red se pierde si se recrea el contenedor del proxy; repite el comando en ese caso.
+
+Con este overlay no hay `caddy` en `docker compose ps` ni en `docker compose logs`, y el volumen `caddy_data`
+no se usa. La verificación del paso 7 es la misma.
+
 ### 7. Verificar
 
 Desde cualquier máquina con `bash` (en el VPS sirve; usa el token de `MCP_AUTH_TOKENS`):
@@ -299,6 +389,7 @@ y `docker compose up -d`.
 | `docker compose` dice `required variable … is missing a value` | Falta `MCP_AUTH_TOKENS`, `POSTGRES_PASSWORD` o `MCP_PUBLIC_DOMAIN` en `.env` |
 | `ports: !reset` o error de sintaxis al leer `compose.prod.yaml` | Compose anterior a v2.24: actualiza Docker (`docker compose version`) |
 | El navegador/curl da error de certificado o `caddy` registra errores ACME | El DNS aún no apunta al VPS, el puerto 80/443 está cerrado (ufw o cortafuegos del proveedor) o el registro está proxificado en Cloudflare. Corrige y `docker compose restart caddy` |
+| `Bind for 0.0.0.0:80 failed: port is already allocated` (o `:443`) | Otro proxy o contenedor del VPS ya usa el puerto. Si es el proxy de tus otros servicios, no lo pares: usa `compose.proxy.yaml` y publica el MCP a través de él ([paso 6b](#6b-si-el-vps-ya-tiene-otro-proxy-en-80443)). `CADDY_HTTP_PORT`/`CADDY_HTTPS_PORT` solo sirven si el 443 público queda libre para Caddy |
 | `401 Unauthorized` | Falta la cabecera `Authorization: Bearer …` o el token no está en `MCP_AUTH_TOKENS` |
 | `421 Misdirected Request` | El `Host` no coincide con `MCP_PUBLIC_DOMAIN` (¿usas otra URL o la IP directamente?) |
 | `403 Forbidden` desde una aplicación web | Su `Origin` no está en `MCP_ALLOWED_ORIGINS` (vacío = solo clientes no navegador) |
