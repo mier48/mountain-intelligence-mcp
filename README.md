@@ -222,41 +222,50 @@ sigue el proceso con `docker compose logs -f caddy` (busca `certificate obtained
 
 ### 6b. Si el VPS ya tiene Traefik en 80/443
 
-Si otro stack (p. ej. `n8n-stack-traefik-1`) ya publica el 80/443, no se levanta Caddy ni se publica ningún
-puerto: [`compose.traefik.yaml`](compose.traefik.yaml) conecta el MCP a la red de ese Traefik y le añade las
-etiquetas de enrutado (solo `/mcp` y `/healthz`, HTTPS con su resolvedor de certificados, HSTS).
+Si otro stack (aquí `n8n-stack-traefik-1`) ya publica el 80/443, no se levanta Caddy ni se publica ningún
+puerto: [`compose.traefik.yaml`](compose.traefik.yaml) conecta el MCP a la red de ese Traefik
+(`traefik_proxy`) y le añade las etiquetas de enrutado: solo `/mcp` y `/healthz`, entrypoint `websecure`, HSTS.
 
-1. Comprueba red, entrypoint y resolvedor del Traefik existente:
+Ese Traefik no tiene resolvedor ACME: sirve los certificados de su proveedor de ficheros
+(`/srv/n8n-stack/traefik/certs.yml`). **Uno de ellos debe cubrir `mountain-mcp.ltrapi.com`**; si no, Traefik
+responde con su certificado por defecto y los clientes MCP rechazan la conexión. Compruébalo:
 
-   ```bash
-   docker inspect n8n-stack-traefik-1 --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'
-   docker inspect n8n-stack-traefik-1 --format '{{join .Args "\n"}}' | grep -E 'entrypoints|certificatesresolvers|providers.docker'
-   ```
+```bash
+sudo cat /srv/n8n-stack/traefik/certs.yml
+sudo openssl x509 -in /srv/n8n-stack/traefik/tls/fullchain.crt -noout -subject -issuer -enddate -ext subjectAltName
+```
 
-   Los valores por defecto son los de la guía oficial de n8n: red `n8n-stack_default`, entrypoint `websecure`
-   y resolvedor `mytlschallenge`. Si alguno difiere, fíjalo en `.env`. Si Traefik usa
-   `--providers.docker.network=…`, `TRAEFIK_NETWORK` debe ser esa red.
+Si no lo cubre, genera uno para el dominio (p. ej. un certificado de origen de Cloudflare si `ltrapi.com` va
+proxificado por Cloudflare), cópialo a `/srv/n8n-stack/traefik/tls/` y añádelo a `certs.yml` (Traefik lo
+recarga solo, tiene `watch`):
 
-2. En `.env`:
+```yaml
+tls:
+  certificates:
+    - certFile: /certs/fullchain.crt          # el existente, sin tocar
+      keyFile: /certs/privkey.key
+    - certFile: /certs/ltrapi.crt
+      keyFile: /certs/ltrapi.key
+```
 
-   ```dotenv
-   COMPOSE_FILE=compose.yaml:compose.traefik.yaml
-   MCP_PUBLIC_DOMAIN=mountain-mcp.ltrapi.com
-   # TRAEFIK_NETWORK=n8n-stack_default
-   # TRAEFIK_ENTRYPOINT=websecure
-   # TRAEFIK_CERTRESOLVER=mytlschallenge
-   ```
+Los ficheros nuevos deben estar dentro de un directorio montado en el contenedor de Traefik; hoy solo se
+montan esos dos ficheros sueltos, así que añade el montaje en el compose del stack n8n y recrea solo Traefik.
 
-3. Aplica (elimina también el contenedor de Caddy que no llegó a arrancar):
+Con el certificado listo:
 
-   ```bash
-   docker compose up -d --build --wait --remove-orphans
-   docker compose ps                                  # ninguna columna PORTS con 0.0.0.0
-   docker logs --since 5m n8n-stack-traefik-1 2>&1 | grep -i mountain   # errores de router/certificado
-   ```
+```dotenv
+# .env
+COMPOSE_FILE=compose.yaml:compose.traefik.yaml
+MCP_PUBLIC_DOMAIN=mountain-mcp.ltrapi.com
+```
 
-El certificado lo pide Traefik; el DNS de `mountain-mcp.ltrapi.com` debe apuntar ya al VPS. La verificación
-del paso 7 es la misma.
+```bash
+docker compose up -d --build --wait --remove-orphans   # elimina también el contenedor de Caddy que no arrancó
+docker compose ps                                      # ninguna columna PORTS con 0.0.0.0
+docker logs --since 5m n8n-stack-traefik-1 2>&1 | grep -i mountain
+```
+
+La verificación del paso 7 es la misma.
 
 ### 7. Verificar
 
