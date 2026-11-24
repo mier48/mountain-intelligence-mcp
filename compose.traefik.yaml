@@ -9,10 +9,25 @@
 # and serves the certificate it already has for MCP_PUBLIC_DOMAIN. Requires Docker Compose v2.24+ (`!reset`).
 
 services:
+  postgres:
+    networks:
+      internal:
+        aliases: [mountain-intelligence-postgres]
+
+  redis:
+    networks:
+      internal:
+        aliases: [mountain-intelligence-redis]
+
   mountain-intelligence-mcp:
     command: ["mountain-intelligence-mcp", "http", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
     ports: !reset []
     environment:
+      # The Traefik network is shared with other stacks that also have `postgres`/`redis` services
+      # (n8n), so those short names are ambiguous there: use this project's unique aliases instead.
+      POSTGRES_HOST: mountain-intelligence-postgres
+      REDIS_URL: redis://mountain-intelligence-redis:6379/0
+      CELERY_BROKER_URL: redis://mountain-intelligence-redis:6379/0
       # Only Traefik forwards client traffic to port 8000, so X-Forwarded-For is trusted and the
       # per-IP rate limit sees the real client address.
       FORWARDED_ALLOW_IPS: "*"
