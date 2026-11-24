@@ -12,7 +12,7 @@ from django.utils import timezone
 from mountain_intelligence.sources.models import Source
 
 from .models import IngestionRun
-from .pipeline import SourceNotSyncable, run_source_sync
+from .pipeline import SourceNotSyncable, cycle_in_progress, run_source_sync
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +36,25 @@ def sync_source(
 
 
 def due_sources(now=None) -> list[Source]:
+    """Sources whose next run is due.
+
+    A source in the middle of a batched sync cycle is due again after
+    ``config.batch_interval_minutes`` (default 0: next scheduler tick) until the cycle completes;
+    otherwise the source waits ``sync_frequency_hours`` after its last run.
+    """
     now = now or timezone.now()
     due: list[Source] = []
     for source in Source.objects.filter(
         enabled=True, access_status__in=Source.ACCESS_ALLOWING_SYNC, sync_frequency_hours__isnull=False
     ):
         last = source.runs.exclude(status=IngestionRun.Status.SKIPPED).order_by("-started_at").first()
-        if last is None or last.started_at <= now - timedelta(hours=source.sync_frequency_hours or 0):
+        if cycle_in_progress(source):
+            wait = timedelta(minutes=int(source.config.get("batch_interval_minutes", 0)))
+            if last is not None and last.status == IngestionRun.Status.FAILED:
+                wait = max(wait, timedelta(hours=1))  # do not hammer a failing site every tick
+        else:
+            wait = timedelta(hours=source.sync_frequency_hours or 0)
+        if last is None or last.started_at <= now - wait:
             due.append(source)
     return due
 

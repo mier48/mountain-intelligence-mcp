@@ -14,8 +14,19 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from mountain_intelligence.catalog.models import Brand
 from mountain_intelligence.catalog.services import brand_slug, get_or_create_brand
 from mountain_intelligence.catalog.taxonomy import CATEGORIES
+from mountain_intelligence.ingestion.adapters.classification import RULE_FIELDS
 
 from .models import Source
+
+NETWORK_ADAPTERS = {"jsonld_product", "shopify_product"}
+
+
+def _regex(slug: str, pattern: Any) -> None:
+    try:
+        re.compile(str(pattern))
+    except re.error as exc:
+        raise ValueError(f"{slug}: invalid regex {pattern!r}: {exc}") from exc
+
 
 _DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9-]{1,63}\.)+[a-z]{2,63}$")
 
@@ -67,7 +78,9 @@ class SourceEntry(BaseModel):
     sync_frequency_hours: int | None = Field(default=None, ge=1, le=24 * 90)
     auto_publish: bool = False
     store_raw_documents: bool = False
-    categories: list[str] = Field(default_factory=list)
+    categories: list[str] = Field(
+        default_factory=list, description="Allowed categories; [] = unrestricted full catalog (incl. uncategorized)"
+    )
     config: dict[str, Any] = Field(default_factory=dict)
     references: list[str] = Field(default_factory=list, description="Evidence URLs for the access decision")
 
@@ -92,9 +105,38 @@ class SourceEntry(BaseModel):
     def _consistency(self) -> SourceEntry:
         if self.enabled and self.access_status not in Source.ACCESS_ALLOWING_SYNC:
             raise ValueError(f"{self.slug}: cannot be enabled with access_status={self.access_status}")
-        if self.adapter == "jsonld_product" and not self.allowed_domains:
+        if self.adapter in NETWORK_ADAPTERS and not self.allowed_domains:
             raise ValueError(f"{self.slug}: network adapters require allowed_domains")
+        self._check_config()
         return self
+
+    def _check_config(self) -> None:
+        cfg = self.config
+        for rule in cfg.get("category_rules", []):
+            if not isinstance(rule, dict) or not {"pattern", "category"} <= set(rule):
+                raise ValueError(f"{self.slug}: category_rules entries need 'pattern' and 'category'")
+            _regex(self.slug, rule["pattern"])
+            if rule["category"] not in CATEGORIES:
+                raise ValueError(f"{self.slug}: category rule targets unknown category {rule['category']!r}")
+            if rule.get("field", "any") not in RULE_FIELDS:
+                raise ValueError(f"{self.slug}: category rule field must be one of {list(RULE_FIELDS)}")
+            if self.categories and rule["category"] not in self.categories:
+                raise ValueError(f"{self.slug}: rule category {rule['category']!r} is outside `categories`")
+        default = cfg.get("default_category")
+        if default is not None and default not in CATEGORIES:
+            raise ValueError(f"{self.slug}: unknown default_category {default!r}")
+        for key in ("url_include", "url_exclude", "product_url_patterns", "sitemap_include"):
+            for pattern in cfg.get(key, []):
+                _regex(self.slug, pattern)
+        for key in ("batch_size", "max_urls", "max_sitemaps", "batch_interval_minutes"):
+            if key in cfg and (not isinstance(cfg[key], int) or isinstance(cfg[key], bool) or cfg[key] < 0):
+                raise ValueError(f"{self.slug}: config.{key} must be a non-negative integer")
+        if (
+            cfg.get("capture_offers")
+            and self.adapter == "shopify_product"
+            and not re.fullmatch(r"[A-Z]{3}", str(cfg.get("currency", "")))
+        ):
+            raise ValueError(f"{self.slug}: capture_offers on Shopify requires config.currency (ISO 4217)")
 
 
 class CandidateSource(BaseModel):

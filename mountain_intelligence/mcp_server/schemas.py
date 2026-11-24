@@ -18,9 +18,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from mountain_intelligence.catalog.taxonomy import CATEGORIES
+from mountain_intelligence.catalog.taxonomy import CATEGORIES, TECHNICAL_CATEGORIES
 
 CategorySlug = Literal[tuple(CATEGORIES)]  # type: ignore[valid-type]
+# Categories with a technical schema: the only ones accepted where technical data is required.
+TechnicalCategorySlug = Literal[tuple(TECHNICAL_CATEGORIES)]  # type: ignore[valid-type]
 Status = Literal["ok", "partial", "not_found", "insufficient_data"]
 
 
@@ -55,7 +57,7 @@ class Envelope(BaseModel):
 
 class OwnedItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    category: CategorySlug  # type: ignore[valid-type]
+    category: TechnicalCategorySlug  # type: ignore[valid-type]
     product_id: str | None = Field(default=None, max_length=200, description="Catalog id if known")
     description: str | None = Field(default=None, max_length=200, description="Free description, e.g. 'old polar'")
 
@@ -80,6 +82,10 @@ class CategoryInfo(BaseModel):
     name_es: str
     family: str
     schema_version: int
+    technical: bool = Field(
+        description="False for `uncategorized`: no specification schema, not usable for recommendations, "
+        "comparisons or compatibility"
+    )
     published_products: int
     fields: list[FieldInfo]
     importance_for_activity: str | None = None
@@ -113,6 +119,12 @@ class ProductSummary(BaseModel):
     name: str
     generation: str | None = None
     category: str
+    technical_classification: bool = Field(
+        description="False when the product is `uncategorized` (catalog data only, no validated specifications)"
+    )
+    source_category: str | None = Field(default=None, description="Manufacturer's own category, as published")
+    product_type: str | None = Field(default=None, description="Manufacturer's product type, as published")
+    image_url: str | None = None
     key_specs: dict[str, Any] = Field(description="Known normalized values in canonical units")
     coverage: float
     price_eur: float | None = Field(default=None, description="Lowest recent EUR offer; null if unknown")
@@ -129,7 +141,10 @@ class SearchProductsResult(Envelope):
 
 class ProductDetailResult(Envelope):
     data: dict[str, Any] | None = Field(
-        default=None, description="Full product sheet: specifications with unit/evidence, variants, offers, sources"
+        default=None,
+        description="Full product sheet: specifications with unit/evidence, manufacturer metadata (category, "
+        "type, tags, collections, external ids, images, original declared attributes), variants (SKU, GTIN, "
+        "options), offers, availability and sources",
     )
 
 

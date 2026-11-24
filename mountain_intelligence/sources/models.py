@@ -43,7 +43,15 @@ class Source(models.Model):
     store_raw_documents = models.BooleanField(default=False, help_text="Retention of raw documents (rights)")
     is_synthetic = models.BooleanField(default=False)
     config = models.JSONField(default=dict, blank=True, help_text="Non-sensitive adapter configuration")
-    categories = ArrayField(models.CharField(max_length=60), default=list, blank=True)
+    categories = ArrayField(
+        models.CharField(max_length=60),
+        default=list,
+        blank=True,
+        help_text="Allowed categories; empty = unrestricted (full manufacturer catalog, incl. uncategorized)",
+    )
+    sync_state = models.JSONField(
+        default=dict, blank=True, help_text="Runtime batch-sync cursor (managed by ingestion, never by the registry)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -62,6 +70,14 @@ class Source(models.Model):
     @property
     def can_sync(self) -> bool:
         return self.enabled and self.access_status in self.ACCESS_ALLOWING_SYNC
+
+    @property
+    def unrestricted_categories(self) -> bool:
+        """`categories: []` means the whole catalog is in scope (any category or `uncategorized`)."""
+        return not self.categories
+
+    def accepts_category(self, slug: str) -> bool:
+        return self.unrestricted_categories or slug in self.categories
 
 
 class SourceRecord(models.Model):

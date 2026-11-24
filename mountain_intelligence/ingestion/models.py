@@ -17,6 +17,9 @@ class IngestionRun(models.Model):
         PARTIAL = "partial"  # finished with item-level errors
         FAILED = "failed"
         SKIPPED = "skipped"  # e.g. locked by a concurrent run
+        # Finished without item errors but did NOT cover the whole source catalog (batch of a larger
+        # cycle, --max-items, or truncated discovery). Never reported as a complete synchronization.
+        INCOMPLETE = "incomplete"
 
     class Trigger(models.TextChoices):
         CLI = "cli"
@@ -33,6 +36,13 @@ class IngestionRun(models.Model):
     finished_at = models.DateTimeField(null=True, blank=True)
     metrics = models.JSONField(default=dict, blank=True)
     errors = models.JSONField(default=list, blank=True)
+    discovery_complete = models.BooleanField(
+        default=False, help_text="Every sitemap/feed page was read and no discovery cap was hit"
+    )
+    catalog_complete = models.BooleanField(
+        default=False, help_text="Discovery complete and every discovered item processed in this sync cycle"
+    )
+    batch = models.JSONField(default=dict, blank=True, help_text="Batch window of the sync cycle covered by this run")
     actor = models.CharField(max_length=120, blank=True)
 
     class Meta:
@@ -50,6 +60,7 @@ class ReviewItem(models.Model):
         AMBIGUOUS_MATCH = "ambiguous_match"
         INVALID_VALUE = "invalid_value"
         MISSING_AT_SOURCE = "missing_at_source"
+        RECLASSIFICATION = "reclassification"  # audit record of a manual category change
 
     class Status(models.TextChoices):
         PENDING = "pending"

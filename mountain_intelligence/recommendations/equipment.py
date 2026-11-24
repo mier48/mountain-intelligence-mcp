@@ -9,7 +9,7 @@ from django.conf import settings
 
 from mountain_intelligence.catalog.queries import NotFoundError, QueryValidationError
 from mountain_intelligence.catalog.services import visible_products
-from mountain_intelligence.catalog.taxonomy import CATEGORIES, get_category
+from mountain_intelligence.catalog.taxonomy import CATEGORIES, TECHNICAL_CATEGORIES, get_category
 
 from . import criteria
 from .engine import context_warnings, recommend, resolve_profile
@@ -120,15 +120,18 @@ def build_equipment_list(
     conditions = conditions or Conditions()
     budget_by_category = budget_by_category or {}
     for cat in budget_by_category:
-        if cat not in CATEGORIES:
-            raise QueryValidationError(f"unknown category in budget_by_category: {cat!r}")
+        if cat not in TECHNICAL_CATEGORIES:
+            raise QueryValidationError(f"unknown or non-technical category in budget_by_category: {cat!r}")
     profile, pdef = resolve_profile(activity)
     requirements = activity_requirements(activity=activity, conditions=conditions, experience=experience)
     owned_by_cat: dict[str, list[dict[str, str | None]]] = {}
     for item in (owned_items or [])[:30]:
         cat = (item.get("category") or "").strip()
-        if cat not in CATEGORIES:
-            raise QueryValidationError(f"owned item has unknown category {cat!r}; use list_categories")
+        if cat not in TECHNICAL_CATEGORIES:
+            raise QueryValidationError(
+                f"owned item has unknown or non-technical category {cat!r}; use a technical category from "
+                "list_categories"
+            )
         owned_by_cat.setdefault(cat, []).append(item)
 
     lines: list[dict[str, Any]] = []

@@ -28,6 +28,9 @@ class Command(JsonCommand):
                 "trigger": r.trigger,
                 "status": r.status,
                 "dry_run": r.dry_run,
+                "discovery_complete": r.discovery_complete,
+                "catalog_complete": r.catalog_complete,
+                "batch": r.batch,
                 "started_at": r.started_at.isoformat(),
                 "finished_at": r.finished_at.isoformat() if r.finished_at else None,
                 "metrics": {k: v for k, v in r.metrics.items() if k != "warnings"},
@@ -35,7 +38,11 @@ class Command(JsonCommand):
             }
             for r in qs[: max(1, min(options["limit"], 500))]
         ]
-        lines = [f"{r['started_at'][:19]} {r['source']:28} {r['status']:10} {r['metrics']}" for r in rows]
+        lines = [
+            f"{r['started_at'][:19]} {r['source']:28} {r['status']:10} "
+            f"complete={'yes' if r['catalog_complete'] else 'no'} {r['metrics']}"
+            for r in rows
+        ]
         if options["errors"]:
             for r in rows:
                 lines += [f"    {r['run_id']} {e['kind']}: {e['item']} {e['message']}" for e in r["errors"][:20]]

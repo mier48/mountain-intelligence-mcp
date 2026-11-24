@@ -7,6 +7,13 @@ Each category declares its technical fields once. From that declaration the syst
 
 Adding a category = adding a `CategoryDefinition` here (and bumping `schema_version` when an
 existing category changes). No MCP tool needs to change.
+
+`uncategorized` is the fallback for catalog products that cannot (yet) be classified into a
+technical category. It has no specification schema: such products keep only the manufacturer's
+original attributes (category, product type, tags, declared characteristics, variants, offers),
+can be published and searched, and are never used where technical data is required
+(recommendations, compatibility, comparisons). Classifying them later into a technical category
+is the "progressive enrichment" path: the strict schema of that category applies from then on.
 """
 
 from __future__ import annotations
@@ -92,6 +99,9 @@ class CategoryDefinition:
     synonyms: tuple[str, ...] = ()
     derive: Callable[[dict[str, Any]], dict[str, Any]] | None = None
     consistency_checks: tuple[Callable[[dict[str, Any]], str | None], ...] = ()
+    # False only for the `uncategorized` fallback: no technical schema, excluded from features
+    # that need technical data (recommendations, compatibility, comparisons, spec filters).
+    technical: bool = True
 
     @cached_property
     def field_map(self) -> dict[str, FieldSpec]:
@@ -132,6 +142,8 @@ class CategoryDefinition:
         return [msg for check in self.consistency_checks if (msg := check(specs))]
 
     def search_terms(self) -> list[str]:
+        if not self.technical:  # the fallback label carries no meaning about the product itself
+            return []
         return [self.slug.replace("_", " "), self.name_en, self.name_es, *self.synonyms]
 
 
@@ -944,6 +956,18 @@ CLIMBING_HELMET = CategoryDefinition(
     consistency_checks=(_range_check("head_circumference_min_mm", "head_circumference_max_mm"),),
 )
 
+UNCATEGORIZED_SLUG = "uncategorized"
+
+UNCATEGORIZED = CategoryDefinition(
+    slug=UNCATEGORIZED_SLUG,
+    name_en="Uncategorized (no technical classification yet)",
+    name_es="Sin clasificar (sin clasificación técnica todavía)",
+    family="unclassified",
+    schema_version=1,
+    fields=(),
+    technical=False,
+)
+
 CATEGORIES: dict[str, CategoryDefinition] = {
     c.slug: c
     for c in (
@@ -957,8 +981,17 @@ CATEGORIES: dict[str, CategoryDefinition] = {
         CRAMPON,
         ICE_AXE,
         CLIMBING_HELMET,
+        UNCATEGORIZED,
     )
 }
+
+# Categories with a technical schema (everything except the `uncategorized` fallback).
+TECHNICAL_CATEGORIES: dict[str, CategoryDefinition] = {k: v for k, v in CATEGORIES.items() if v.technical}
+
+
+def is_technical(slug: str) -> bool:
+    definition = CATEGORIES.get(slug)
+    return bool(definition and definition.technical)
 
 
 def get_category(slug: str) -> CategoryDefinition:

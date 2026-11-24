@@ -25,6 +25,14 @@ mountain_intelligence/
 de la categoría) `→ Match` (`ingestion.pipeline.match_product`) `→ Review/Publish` (cola `ReviewItem`).
 Las herramientas MCP solo leen productos `published` (y excluyen los sintéticos salvo configuración).
 
+**Catálogo universal.** El descubrimiento (`ingestion/discovery.py`) lee los sitemaps del fabricante y
+devuelve todas las fichas de producto con URL canónica, sin filtros por palabras clave; informa si fue
+completo. La clasificación (`ingestion/adapters/classification.py`) ocurre después de extraer: reglas →
+categoría por defecto → `uncategorized`. El pipeline aplica el alcance de la fuente (`categories`), guarda los
+metadatos originales, normaliza solo frente a esquemas técnicos y procesa catálogos grandes por lotes con un
+cursor persistido (`Source.sync_state`). Cada `IngestionRun` registra `discovery_complete`,
+`catalog_complete` y la ventana del lote; una ejecución parcial queda `incomplete` y no detecta ausencias.
+
 ## Decisiones (ADR resumidos)
 
 | # | Decisión | Motivo / alternativas descartadas |
@@ -44,6 +52,9 @@ Las herramientas MCP solo leen productos `published` (y excluyen los sintéticos
 | 13 | Compatibilidad: coincidencia de tipos ⇒ `conditional`, nunca `compatible`; `compatible` exige una declaración documentada a nivel de par (`CompatibilityAssertion`) sin evidencias contrarias | Requisito explícito de no confirmar ajustes físicos por clasificación genérica |
 | 14 | Ranking con pesos versionados (`rules-v1`): los datos ausentes puntúan 0 en su componente y marcan el ranking como parcial; la normalización de componentes se hace sobre los criterios aplicables a la consulta (iguales para todos los candidatos) | No premiar la ausencia de datos. Requisitos obligatorios y presupuesto son filtros, no puntuación |
 | 15 | Datos sintéticos con `data_status=synthetic_fixture`, marcas/GTIN inventados (prefijo GS1 interno 200) y excluidos por defecto | Aislamiento de demo frente a catálogo real |
+| 17 | **`uncategorized` como categoría real sin esquema** (`technical=False`) en lugar de `category=NULL` o una tabla aparte | Mantiene la FK, la unicidad y la búsqueda existentes; las funciones que necesitan datos técnicos solo tienen que comprobar `technical`. Clasificar después es cambiar la FK, sin migrar datos |
+| 18 | Adaptador **Shopify** sobre el JSON público del escaparate (`/products/<handle>.js`) y sitemaps de productos | Una petición por producto con variantes, GTIN, precios, disponibilidad e imágenes; el JSON-LD de los temas es más pobre y variable (opcional). No se usa la API Admin (requiere credenciales del comerciante) |
+| 19 | **Lotes con cursor por clave ordenada** (no por offset) y descubrimiento completo en cada lote | Estable ante altas/bajas entre lotes; la detección de ausencias usa el descubrimiento completo, no lo procesado |
 | 16 | Token bearer estático para HTTP en el MVP | Despliegue privado y clientes que permiten cabeceras. OAuth 2.1 (protected resource metadata, `TokenVerifier` del SDK) queda en backlog |
 
 ## Suposiciones registradas
@@ -51,5 +62,11 @@ Las herramientas MCP solo leen productos `published` (y excluyen los sintéticos
 - Moneda de filtrado EUR; las ofertas en otra moneda se muestran pero no se convierten.
 - Peso de calzado: se compara `weight_per_boot_g` (derivado de `weight_g` + `weight_basis`); sin base conocida no
   se deriva y no entra en filtros de peso.
-- Un producto «falta en la fuente» solo si la descubierta fue completa (sin `--max-items` ni tope de URLs).
+- Un producto «falta en la fuente» solo si la descubierta fue completa (sin `--max-items`, sin tope de URLs
+  ni de sitemaps y con todos los sitemaps hijos legibles). Si vuelve a aparecer, se reactiva y su revisión
+  pendiente de ausencia queda obsoleta.
+- Las características declaradas (`source_attributes`) son afirmaciones del fabricante sin validar: se
+  muestran y se buscan, pero nunca alimentan filtros, recomendaciones ni compatibilidad.
+- La talla de una variante Shopify solo se interpreta como talla EU de calzado si el producto está clasificado
+  en una categoría de calzado.
 - Un valor existente aportado por otra fuente nunca se sobrescribe automáticamente: se abre un conflicto.

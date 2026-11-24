@@ -16,6 +16,11 @@
    mochilas; adaptador de feeds Awin si se firma un acuerdo de datos con un distribuidor.
 
 5. Adaptadores específicos por fabricante (tablas técnicas HTML) cuando JSON-LD no cubra los campos.
+5b. Migrar el resto de fuentes a catálogo completo (`categories: []`, sin palabras clave en `url_include`,
+    reglas en lugar de `default_category`) tras validar cada una con `--dry-run`; adaptador Shopify para
+    Scarpa, Grivel, Black Diamond y Montane.
+5c. Mapear `source_attributes` frecuentes a campos técnicos (`property_map`) y nuevas categorías para lo que
+    hoy queda `uncategorized` (sacos, tiendas, bastones, frontales…).
 6. Aserciones de compatibilidad a nivel de par desde listas de ajuste oficiales; reglas para otras relaciones
    (mochila/piolet, casco/linterna).
 7. Feeds autorizados de distribuidores (Barrabés, Deporvillage, Snowleader, Bergfreunde) solo para ofertas.

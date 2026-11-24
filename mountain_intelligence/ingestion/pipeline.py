@@ -4,6 +4,16 @@ Idempotency: each (source, external_id) maps to one SourceRecord; the canonical 
 validated extraction contract is stored, so a repeated run with unchanged content does not
 create products, variants or evidence. Products are never deleted by ingestion: errors, 404s
 and absence from discovery only flag records/products for operator review.
+
+Universal catalog: a source with ``categories: []`` accepts every product it publishes. Products
+that match no technical category are stored as ``uncategorized`` with their original metadata
+(no normalized specifications) and can be reclassified later (progressive enrichment). A source
+with a category list only keeps products classified into those categories (``out_of_scope``).
+
+Large catalogs: with ``config.batch_size`` each run processes the next window of the (sorted,
+de-duplicated) discovery and stores a cursor in ``Source.sync_state``; the next run continues.
+A run is only ``catalog_complete`` when discovery was complete and the cycle reached its end; a
+truncated discovery never flags products as missing.
 """
 
 from __future__ import annotations
@@ -31,18 +41,19 @@ from mountain_intelligence.catalog.services import (
     make_public_id,
     refresh_derived_and_search,
 )
-from mountain_intelligence.catalog.taxonomy import CATEGORIES, CategoryDefinition
+from mountain_intelligence.catalog.taxonomy import CATEGORIES, UNCATEGORIZED_SLUG, CategoryDefinition
 from mountain_intelligence.offers.models import Offer, PriceObservation
 from mountain_intelligence.sources.models import Source, SourceRecord, SpecificationEvidence
 
-from .adapters.base import AdapterContext, AdapterError, get_adapter, limited
-from .contracts import ExtractedProduct
+from .adapters.base import AdapterContext, AdapterError, canonical_key, get_adapter, limited
+from .contracts import DiscoveredItem, ExtractedProduct, SourceAttribute
 from .http import FetchError, SafeFetcher
 from .models import IngestionRun, ReviewItem
 
 logger = logging.getLogger(__name__)
 
 MAX_RUN_ERRORS = 200
+MAX_BATCH_SIZE = 20_000
 
 
 class SourceNotSyncable(Exception):
@@ -51,7 +62,7 @@ class SourceNotSyncable(Exception):
 
 @dataclass
 class ItemOutcome:
-    status: str  # new | updated | unchanged | not_modified | conflict | invalid | error
+    status: str  # new | updated | unchanged | not_modified | conflict | invalid | out_of_scope | error
     product: Product | None = None
     reviews: int = 0
     messages: list[str] = field(default_factory=list)
@@ -122,11 +133,8 @@ def match_product(
         if hit:
             return MatchResult(hit, reason="brand+mpn")
     target = _norm_name(extracted.name, brand_name)
-    same_name = [
-        p
-        for p in Product.objects.filter(brand_id=brand_id, category__slug=category.slug)
-        if _norm_name(p.name, brand_name) == target
-    ]
+    candidates = _match_scope(Product.objects.filter(brand_id=brand_id), category)
+    same_name = [p for p in candidates if _norm_name(p.name, brand_name) == target]
     exact = [p for p in same_name if fold(p.generation) == fold(extracted.generation)]
     if len(exact) == 1:
         return MatchResult(exact[0], reason="brand+name+generation")
@@ -137,13 +145,25 @@ def match_product(
     if unknown_gen:
         return MatchResult(None, ambiguous=unknown_gen, reason="same name but generation unknown on one side")
     similar = list(
-        Product.objects.filter(brand_id=brand_id, category__slug=category.slug)
+        _match_scope(Product.objects.filter(brand_id=brand_id), category)
         .annotate(similarity=TrigramSimilarity(Lower("name"), target))
         .filter(similarity__gt=0.6)
         .order_by("-similarity")[:5]
     )
     # Same name with a *different, explicit* generation is a distinct model: not a duplicate.
     return MatchResult(None, similar=[p for p in similar if p not in same_name])
+
+
+def _match_scope(qs, category: CategoryDefinition):
+    """Products a name match may target.
+
+    A technical classification also matches the brand's `uncategorized` products (so they get
+    upgraded instead of duplicated); an `uncategorized` extraction matches any category (it never
+    creates a second copy of a model that is already classified).
+    """
+    if not category.technical:
+        return qs
+    return qs.filter(category__slug__in=[category.slug, UNCATEGORIZED_SLUG])
 
 
 # ------------------------------------------------------------------------------------------
@@ -267,6 +287,13 @@ def ingest_product(
     category = CATEGORIES.get(extracted.category)
     if category is None:
         return ItemOutcome("invalid", messages=[f"unknown category {extracted.category!r}"])
+    if force_product is None and not source.accepts_category(category.slug):
+        return ItemOutcome(
+            "out_of_scope",
+            messages=[f"category {category.slug!r} is outside the source scope {sorted(source.categories)}"],
+        )
+    if not category.technical:
+        extracted = _specs_to_source_attributes(extracted)
 
     explicit_units = {k: loc.unit for k, loc in extracted.locators.items() if loc.unit}
     norm = normalize_specifications(
@@ -354,6 +381,69 @@ def ingest_product(
     return outcome
 
 
+def _specs_to_source_attributes(extracted: ExtractedProduct) -> ExtractedProduct:
+    """Without a technical schema nothing is normalized: raw values are kept as original attributes."""
+    if not extracted.specifications:
+        return extracted
+    moved = []
+    for name, value in extracted.specifications.items():
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        loc = extracted.locators.get(name)
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        moved.append(
+            SourceAttribute(
+                name=name[:120],
+                value=" ".join(text.split())[:500] or "-",
+                unit=((loc.unit or "") if loc else "")[:20],
+                locator=(loc.locator if loc else f"field:{name}")[:300],
+            )
+        )
+    known = {(a.name, a.value) for a in extracted.source_attributes}
+    merged = [*extracted.source_attributes, *(a for a in moved if (a.name, a.value) not in known)][:150]
+    return extracted.model_copy(update={"specifications": {}, "locators": {}, "source_attributes": merged})
+
+
+def _apply_metadata(product: Product, extracted: ExtractedProduct, source: Source) -> bool:
+    """Store the manufacturer's original catalog metadata. Non-empty observations replace older
+    values; empty ones never erase what another observation provided. Returns True on change."""
+    before = (
+        product.source_category,
+        product.product_type,
+        list(product.tags),
+        list(product.collections),
+        dict(product.external_ids or {}),
+        list(product.images or []),
+        list(product.source_attributes or []),
+    )
+    if extracted.source_category:
+        product.source_category = extracted.source_category
+    if extracted.product_type:
+        product.product_type = extracted.product_type
+    if extracted.tags:
+        product.tags = extracted.tags
+    if extracted.collections:
+        product.collections = extracted.collections
+    if extracted.external_ids:
+        product.external_ids = {**(product.external_ids or {}), source.slug: extracted.external_ids}
+    if extracted.images:
+        product.images = [img.model_dump(mode="json") for img in extracted.images]
+    if extracted.source_attributes:
+        others = [a for a in product.source_attributes or [] if isinstance(a, dict) and a.get("source") != source.slug]
+        mine = [{**a.model_dump(mode="json"), "source": source.slug} for a in extracted.source_attributes]
+        product.source_attributes = (mine + others)[:300]
+    after = (
+        product.source_category,
+        product.product_type,
+        list(product.tags),
+        list(product.collections),
+        dict(product.external_ids or {}),
+        list(product.images or []),
+        list(product.source_attributes or []),
+    )
+    return before != after
+
+
 def _create_product(
     source: Source,
     extracted: ExtractedProduct,
@@ -381,7 +471,9 @@ def _create_product(
         data_status=data_status_for(source),
         last_verified_at=observed_at,
         spec_schema_version=category.schema_version,
+        category_basis=extracted.category_basis,
     )
+    _apply_metadata(product, extracted, source)
     possible_duplicates = [p.public_id for p in match.similar]
     publish_now = source.auto_publish and not possible_duplicates
     if publish_now:
@@ -422,6 +514,42 @@ def _update_product(
     run: IngestionRun | None,
     observed_at: datetime,
 ) -> ItemOutcome:
+    reclassified = False
+    if product.category.slug != category.slug and not category.technical:
+        # Never downgrade: a product already in a technical category keeps it (and its specs).
+        category = CATEGORIES[product.category.slug]
+    elif product.category.slug == UNCATEGORIZED_SLUG and category.technical:
+        # Progressive enrichment: an unclassified product gains a technical category.
+        from mountain_intelligence.catalog.models import Category
+
+        clash = (
+            Product.objects.filter(
+                brand_id=product.brand_id,
+                category__slug=category.slug,
+                name=product.name,
+                generation=product.generation,
+            )
+            .exclude(pk=product.pk)
+            .first()
+        )
+        if clash is not None:
+            created = _open_review(
+                kind=ReviewItem.Kind.CONFLICT,
+                product=product,
+                record=record,
+                run=run,
+                field_name="category",
+                current=product.category.slug,
+                proposed=category.slug,
+                reason=f"Reclassification would duplicate {clash.public_id}; merge or reject manually",
+            )
+            return ItemOutcome("conflict", product, int(created))
+        product.category = Category.objects.get(slug=category.slug)
+        product.category_basis = extracted.category_basis
+        product.spec_schema_version = category.schema_version
+        reclassified = True
+    if product.category.slug == category.slug and not product.category_basis and extracted.category == category.slug:
+        product.category_basis = extracted.category_basis  # products created before basis tracking
     if product.category.slug != category.slug:
         created = _open_review(
             kind=ReviewItem.Kind.CONFLICT,
@@ -506,6 +634,7 @@ def _update_product(
         if new and not getattr(product, attr):
             setattr(product, attr, new)
             changed = True
+    changed = _apply_metadata(product, extracted, source) or changed or reclassified
     product.specifications = specs
     product.pending_review_fields = sorted(pending)
     product.last_verified_at = observed_at
@@ -535,6 +664,8 @@ def _upsert_variants(product: Product, extracted: ExtractedProduct, category: Ca
             lookup &= Q(gtin=v.gtin)
         elif v.sku:
             lookup &= Q(sku=v.sku)
+        elif v.external_id:
+            lookup &= Q(external_id=v.external_id, sku="", gtin="")
         else:
             lookup &= Q(size_label=v.size_label, color=v.color, sku="", gtin="")
         overrides = {}
@@ -546,6 +677,7 @@ def _upsert_variants(product: Product, extracted: ExtractedProduct, category: Ca
         variant = ProductVariant.objects.filter(lookup).first() or ProductVariant(product=product)
         variant.sku, variant.mpn, variant.gtin = v.sku, v.mpn, v.gtin
         variant.size_label, variant.size_eu, variant.color = v.size_label, v.size_eu, v.color
+        variant.external_id, variant.options, variant.image_url = v.external_id, v.options, v.image_url
         variant.spec_overrides = overrides
         variant.save()
 
@@ -609,8 +741,14 @@ def run_source_sync(
     max_items: int | None = None,
     fetcher: SafeFetcher | None = None,
     ignore_enabled: bool = False,
+    batch_size: int | None = None,
+    restart_cycle: bool = False,
 ) -> IngestionRun:
-    """Run one ingestion for `source`. Never raises for item-level problems."""
+    """Run one ingestion for `source`. Never raises for item-level problems.
+
+    ``max_items`` processes at most N items (validation/debugging; never a complete sync).
+    ``batch_size`` (or ``config.batch_size``) processes the next window of a multi-run cycle.
+    """
     if not source.can_sync and not (ignore_enabled and source.access_status in Source.ACCESS_ALLOWING_SYNC):
         raise SourceNotSyncable(
             f"source {source.slug!r} is not syncable (enabled={source.enabled}, access={source.access_status})"
@@ -620,14 +758,18 @@ def run_source_sync(
     metrics = dict.fromkeys(
         (
             "discovered",
+            "processed",
             "new",
             "updated",
             "unchanged",
             "not_modified",
             "conflicts",
             "invalid",
+            "out_of_scope",
             "errors",
             "missing",
+            "reactivated",
+            "rekeyed",
             "reviews_opened",
         ),
         0,
@@ -638,6 +780,11 @@ def run_source_sync(
         metrics["errors"] += 1
         if len(errors) < MAX_RUN_ERRORS:
             errors.append({"item": external_id[:300], "kind": kind, "message": message[:300]})
+
+    if batch_size is None and source.config.get("batch_size"):
+        batch_size = int(source.config["batch_size"])
+    if batch_size is not None:
+        batch_size = max(1, min(int(batch_size), MAX_BATCH_SIZE))
 
     with source_lock(source) as acquired:
         if not acquired:
@@ -650,33 +797,178 @@ def run_source_sync(
         if own_fetcher:
             fetcher = SafeFetcher(source.allowed_domains)
         ctx = AdapterContext(source=source, fetcher=fetcher, max_items=max_items)
-        seen: set[str] = set()
-        discovery_complete = False
+        discovery_ok = False
+        cycle_done = False
         try:
-            for item in limited(adapter.discover(ctx), max_items):
-                metrics["discovered"] += 1
-                seen.add(item.external_id)
+            if max_items is not None:
+                # Bounded validation run: lazy discovery, never a complete synchronization.
+                items = _unique(limited(adapter.discover(ctx), max_items))
+                all_keys = {i.external_id for i in items}
+                window, cycle_done = items, False
+            else:
+                items = _unique(adapter.discover(ctx))
+                all_keys = {i.external_id for i in items}
+                discovery_ok = True
+                window, cycle_done = _batch_window(source, items, batch_size, run, restart_cycle)
+            metrics["discovered"] = len(items)
+            if discovery_ok and not dry_run:
+                metrics["rekeyed"] = _rekey_legacy_records(source, adapter, all_keys)
+                if _discovery_is_complete(ctx):
+                    metrics["reactivated"] = _reactivate_rediscovered(source, all_keys)
+            for item in window:
+                metrics["processed"] += 1
                 _process_item(source, adapter, ctx, item, run, metrics, record_error, dry_run)
-            discovery_complete = max_items is None and not any("capped" in w for w in ctx.warnings)
         except (AdapterError, FetchError) as exc:
             record_error("*discovery*", getattr(exc, "kind", "adapter"), str(exc))
             run.status = IngestionRun.Status.FAILED
+            discovery_ok = False
         finally:
             if own_fetcher and fetcher is not None:
                 fetcher.close()
-        if discovery_complete and not dry_run and run.status != IngestionRun.Status.FAILED:
-            metrics["missing"] = _flag_missing(source, seen, run)
+        failed = run.status == IngestionRun.Status.FAILED
+        discovery_complete = discovery_ok and not failed and _discovery_is_complete(ctx)
+        if discovery_complete and not dry_run:
+            # Only a complete discovery may decide that something disappeared from the source.
+            metrics["missing"] = _flag_missing(source, all_keys, run)
+        if not failed and not dry_run and batch_size is not None and max_items is None:
+            _advance_cycle(source, run, cycle_done=cycle_done, discovery_complete=discovery_complete)
+    run.discovery_complete = discovery_complete
+    run.catalog_complete = discovery_complete and cycle_done and max_items is None
     if run.status != IngestionRun.Status.FAILED:
-        run.status = IngestionRun.Status.PARTIAL if metrics["errors"] else IngestionRun.Status.SUCCEEDED
-    run.metrics = {**metrics, "warnings": ctx.warnings[:20]}
+        if metrics["errors"]:
+            run.status = IngestionRun.Status.PARTIAL
+        elif not run.catalog_complete:
+            run.status = IngestionRun.Status.INCOMPLETE
+        else:
+            run.status = IngestionRun.Status.SUCCEEDED
+    warnings: list[str] = []
+    if max_items is not None:
+        warnings.append("bounded run (--max-items): not a complete sync; missing-product detection skipped")
+    elif not discovery_complete and not failed:
+        warnings.append("discovery incomplete: missing-product detection skipped; run is not a complete sync")
+    warnings.extend(dict.fromkeys(ctx.warnings))  # completeness first, then unique adapter warnings
+    run.metrics = {**metrics, "warnings": warnings[:20]}
     run.errors = errors
     run.finished_at = timezone.now()
     run.save()
     logger.info(
         "ingestion run finished",
-        extra={"run_id": str(run.run_id), "source": source.slug, "status": run.status, "metrics": metrics},
+        extra={
+            "run_id": str(run.run_id),
+            "source": source.slug,
+            "status": run.status,
+            "metrics": metrics,
+            "catalog_complete": run.catalog_complete,
+        },
     )
     return run
+
+
+def _discovery_is_complete(ctx: AdapterContext) -> bool:
+    """Adapters report truncation through `ctx.discovery_complete` (see ingestion.discovery)."""
+    return ctx.discovery_complete
+
+
+def _unique(items) -> list[DiscoveredItem]:
+    """De-duplicate discovered items by identity, keeping the first occurrence."""
+    out: dict[str, DiscoveredItem] = {}
+    for item in items:
+        out.setdefault(item.external_id, item)
+    return list(out.values())
+
+
+def _batch_window(
+    source: Source, items: list[DiscoveredItem], batch_size: int | None, run: IngestionRun, restart: bool
+) -> tuple[list[DiscoveredItem], bool]:
+    """Select the items this run processes. Returns (window, cycle_done)."""
+    if batch_size is None:
+        run.batch = {"mode": "full", "total": len(items)}
+        return items, True
+    state = {} if restart else dict(source.sync_state or {})
+    cursor = str(state.get("cursor") or "")
+    ordered = sorted(items, key=lambda i: i.external_id)
+    pending = [i for i in ordered if i.external_id > cursor] if cursor else ordered
+    window = pending[:batch_size]
+    run.batch = {
+        "mode": "batch",
+        "cycle_id": state.get("cycle_id") or str(run.run_id),
+        "cycle_started_at": state.get("cycle_started_at") or run.started_at.isoformat(),
+        "batch_size": batch_size,
+        "total": len(ordered),
+        "already_done": len(ordered) - len(pending),
+        "this_batch": len(window),
+        "remaining_after": max(0, len(pending) - len(window)),
+        "cursor_from": cursor or None,
+        "cursor_to": window[-1].external_id if window else cursor or None,
+    }
+    return window, len(pending) <= batch_size
+
+
+def _advance_cycle(source: Source, run: IngestionRun, *, cycle_done: bool, discovery_complete: bool) -> None:
+    state = dict(source.sync_state or {})
+    batch = run.batch or {}
+    if cycle_done:
+        state = {
+            "cycles_completed": int(state.get("cycles_completed", 0)) + 1,
+            "last_cycle_id": batch.get("cycle_id"),
+            "last_cycle_finished_at": timezone.now().isoformat(),
+            "last_cycle_complete": discovery_complete,
+        }
+    else:
+        state.update(
+            cycle_id=batch.get("cycle_id"),
+            cycle_started_at=batch.get("cycle_started_at"),
+            cursor=batch.get("cursor_to"),
+            updated_at=timezone.now().isoformat(),
+        )
+    source.sync_state = state
+    Source.objects.filter(pk=source.pk).update(sync_state=state)
+
+
+def cycle_in_progress(source: Source) -> bool:
+    return bool((source.sync_state or {}).get("cursor"))
+
+
+def _rekey_legacy_records(source: Source, adapter, discovered: set[str]) -> int:
+    """Move records stored under a non-canonical id (older URL forms) to their canonical identity.
+
+    Keeps product links, ETags and history when URL canonicalization changes, instead of flagging
+    the old record as missing and creating a new one.
+    """
+    count = 0
+    stale = SourceRecord.objects.filter(source=source).exclude(external_id__in=discovered)
+    existing = set(
+        SourceRecord.objects.filter(source=source, external_id__in=discovered).values_list("external_id", flat=True)
+    )
+    for record in stale.only("id", "external_id"):
+        key = canonical_key(adapter, record.external_id, source.config)
+        if key != record.external_id and key in discovered and key not in existing:
+            SourceRecord.objects.filter(pk=record.pk).update(external_id=key[:300])
+            existing.add(key)
+            count += 1
+    return count
+
+
+def _reactivate_rediscovered(source: Source, discovered: set[str]) -> int:
+    """Records flagged missing that are listed again by a complete discovery become active."""
+    records = list(
+        SourceRecord.objects.filter(source=source, status=SourceRecord.Status.MISSING, external_id__in=discovered)
+    )
+    for record in records:
+        SourceRecord.objects.filter(pk=record.pk).update(status=SourceRecord.Status.ACTIVE)
+        if record.product_id:
+            Product.objects.filter(pk=record.product_id, source_status=Product.SourceStatus.MISSING_AT_SOURCE).update(
+                source_status=Product.SourceStatus.OK, source_status_since=None
+            )
+            ReviewItem.objects.filter(
+                kind=ReviewItem.Kind.MISSING_AT_SOURCE, status=ReviewItem.Status.PENDING, source_record=record
+            ).update(
+                status=ReviewItem.Status.OBSOLETE,
+                decided_at=timezone.now(),
+                decided_by="system",
+                decision_reason="listed again by the source",
+            )
+    return len(records)
 
 
 def _process_item(source, adapter, ctx, item, run, metrics, record_error, dry_run) -> None:
@@ -739,6 +1031,9 @@ def _process_item(source, adapter, ctx, item, run, metrics, record_error, dry_ru
                 outcome = ingest_product(
                     source, extracted, run=run, record=item_record, observed_at=document.fetched_at
                 )
+                if outcome.status == "out_of_scope" and item_record.product_id is None:
+                    # Nothing stored for an out-of-scope item: drop the empty record again.
+                    SourceRecord.objects.filter(pk=item_record.pk).delete()
                 if outcome.product is not None and outcome.status != "invalid":
                     SourceRecord.objects.filter(pk=item_record.pk).update(
                         etag=document.etag,
@@ -759,6 +1054,7 @@ def _process_item(source, adapter, ctx, item, run, metrics, record_error, dry_ru
             "unchanged": "unchanged",
             "conflict": "conflicts",
             "invalid": "invalid",
+            "out_of_scope": "out_of_scope",
         }.get(outcome.status, "errors")
         metrics[key] += 1
         metrics["reviews_opened"] += outcome.reviews

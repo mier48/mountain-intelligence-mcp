@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from mountain_intelligence.catalog.models import DataStatus, Product
 from mountain_intelligence.catalog.queries import NotFoundError, QueryValidationError, get_visible_product
-from mountain_intelligence.catalog.taxonomy import CATEGORIES
+from mountain_intelligence.catalog.taxonomy import is_technical
 from mountain_intelligence.sources.models import SpecificationEvidence
 
 from .models import CompatibilityAssertion, CompatibilityRule
@@ -62,8 +62,8 @@ def load_rules(path: Path) -> dict[str, int]:
         if entry.evaluator not in EVALUATORS:
             raise ValueError(f"{entry.key}: unknown evaluator {entry.evaluator!r}")
         for cat in (entry.source_category, entry.target_category, *entry.parameters.get("boot_categories", [])):
-            if cat not in CATEGORIES:
-                raise ValueError(f"{entry.key}: unknown category {cat!r}")
+            if not is_technical(cat):
+                raise ValueError(f"{entry.key}: unknown or non-technical category {cat!r}")
         _validate_parameters(entry)
         existing = CompatibilityRule.objects.filter(key=entry.key, version=entry.version).first()
         payload = entry.model_dump(exclude={"key", "version"})
@@ -291,6 +291,12 @@ def check_compatibility(
     if len(product_ids) != 2:
         raise QueryValidationError("check_compatibility expects exactly two product ids")
     products = [get_visible_product(pid, include_synthetic) for pid in product_ids]
+    unclassified = [p.public_id for p in products if not is_technical(p.category.slug)]
+    if unclassified:
+        raise QueryValidationError(
+            f"{unclassified} have no technical classification (uncategorized): compatibility checks need "
+            "technical data (binding types, welts, sizes) and are not available for them"
+        )
     rule = (
         CompatibilityRule.objects.filter(
             relation=relation, status__in=["published", "demo"] if include_synthetic else ["published"]

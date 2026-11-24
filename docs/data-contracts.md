@@ -20,6 +20,8 @@ entre sí.
 | `ice_axe` | `intended_use`, `length_mm`, `weight_g`, `shaft`, `en13089_shaft_type`*, `en13089_head_type`*, `declared_standards`* |
 | `climbing_helmet` | `weight_g`, `head_circumference_min/max_mm`, `construction`, `declared_standards`* |
 
+| `uncategorized` | Sin esquema técnico (`technical: false`). Respaldo para productos que ninguna regla clasifica: solo metadatos del fabricante y atributos declarados; excluido de recomendaciones, comparaciones y compatibilidad |
+
 Reglas: `null` = desconocido; no se infieren valores del marketing (`waterproof` no implica columna de agua);
 RET y MVTR nunca se comparan; las normas son «declaradas por el fabricante», no certificaciones del sistema.
 Comprobaciones de coherencia: welts frente a tipos de crampón declarados, rangos mín/máx, `fill_power` solo
@@ -30,7 +32,19 @@ para plumón.
 `ExtractedProduct`: `external_id`, `canonical_url`, `brand`, `name`, `generation`, `category`, `mpn`,
 `aliases`, `summary` (breve, neutro), `specifications` (valores crudos), `units_from_field_names`,
 `locators` (`campo → {locator, excerpt ≤280, unit}`), `variants` (`sku`, `mpn`, `gtin` con dígito de control
-GS1, talla, color, `spec_overrides`) y `offers` (`retailer`, `currency` ISO, `price > 0`, `availability`).
+GS1, talla, color, `external_id`, `options` {nombre de opción → valor}, `image_url`, `spec_overrides`) y
+`offers` (`retailer`, `currency` ISO, `price > 0`, `availability`, `variant_sku`; hasta 500, una por variante).
+
+Metadatos del catálogo del fabricante (se conservan tal cual, nunca son especificaciones validadas):
+`category_basis` (`explicit | rule | default | fallback`), `source_category`, `product_type`, `tags`,
+`collections`, `external_ids` (p. ej. `shopify_product_id`, `shopify_handle`), `images` (`url` http(s), `alt`,
+`position`, `variant_skus`) y `source_attributes` (`name`, `value`, `unit`, `locator`: características tal y
+como las declara la fuente). En un producto `uncategorized`, las `specifications` crudas que traiga el
+adaptador se convierten en `source_attributes` (nada se normaliza sin esquema).
+
+En `Product` estos datos se guardan en columnas homónimas; `external_ids` se agrupa por fuente
+(`{"altus-website": {...}}`) y cada `source_attribute` lleva la fuente que lo declaró. Un valor no vacío
+de la última observación sustituye al anterior; un valor vacío nunca borra lo aportado por otra observación.
 
 ## Formato de importación estructurada
 
@@ -50,8 +64,15 @@ saber por qué cambió un dato.
 
 ## Identidad e idempotencia
 
-- `SourceRecord(source, external_id)` único; `external_id` = URL/ID descubierto. Se guarda el hash SHA-256
-  del contrato validado: mismo hash ⇒ `unchanged` sin escrituras de catálogo.
+- `SourceRecord(source, external_id)` único; `external_id` = URL canónica descubierta (sin parámetros,
+  fragmento, prefijo de idioma ni ruta de colección; ver `ingestion/discovery.py`). Si la canonicalización
+  cambia, los registros antiguos se re-identifican (`rekeyed`) conservando producto, ETag e historial.
+  Se guarda el hash SHA-256 del contrato validado: mismo hash ⇒ `unchanged` sin escrituras de catálogo.
+- Variantes: GTIN → SKU → id externo → talla+color dentro del producto. Colores y tallas de una misma ficha
+  son variantes, no productos.
+- Clasificación progresiva: una clasificación técnica también empareja con los productos `uncategorized` de la
+  marca (se reclasifican, no se duplican); una extracción `uncategorized` empareja en cualquier categoría y
+  nunca degrada un producto ya clasificado. Una reclasificación que chocaría con otro producto abre un conflicto.
 - `Product.public_id` estable (slug marca+nombre+generación). Emparejamiento: registro previo → GTIN → marca+MPN
   → marca+categoría+nombre+generación exactos. Mismo nombre con generación desconocida en un lado ⇒ revisión
   (`ambiguous_match`). Nombre similar (trigramas > 0,6) ⇒ producto nuevo en revisión con posibles duplicados;
@@ -64,12 +85,25 @@ matched_products, data_coverage}`, `pagination{next_cursor,total}`, `meta{server
 catalog_scope, generated_at}`. `outputSchema` publicado por cada tool. Errores de validación ⇒ `isError` con
 `validation_error: …`; errores internos ⇒ mensaje genérico del SDK sin traza.
 
+Resúmenes de producto: `technical_classification`, `source_category`, `product_type`, `image_url` además de
+`key_specs`/`coverage` (0 sin esquema técnico). `get_product` añade `category_basis`, `tags`, `collections`,
+`external_ids`, `images`, `source_attributes`, variantes con `options`/`external_id`/`image_url`, ofertas con
+`variant_sku` y `availability` (ofertas recientes por estado, agotadas incluidas). `search_products` acepta
+`classification: any | technical | uncategorized`. `recommend_products` y `OwnedItem` solo aceptan categorías
+técnicas.
+
 ## Registro de marcas y fuentes (`data/sources.yaml`)
 
 - `brands[]`: `name`, `official_domain`, `domain_verified` (exige `verified_at`), `specialties`,
   `integration_status` se guardan en BD; `country`, `robots`, `sitemaps`, `evidence`, `notes` documentan la
   evaluación (no se persisten).
 - `sources[]`: configuración del adaptador + `access_status` + `references` (se añaden a `access_notes`).
+  `categories: []` = sin restricción (catálogo completo, incluido `uncategorized`); una lista restringe el
+  alcance (lo demás es `out_of_scope`). Se validan las regex (`url_include`, `product_url_patterns`,
+  `url_exclude`, `sitemap_include`, reglas), que las reglas apunten a categorías existentes y dentro de
+  `categories`, los enteros (`batch_size`, `max_urls`, `max_sitemaps`, `batch_interval_minutes`) y que
+  `capture_offers` en Shopify declare `currency`. `Source.sync_state` (cursor de lotes) lo gestiona la ingesta,
+  nunca el YAML.
 - `candidate_sources[]`: rutas de datos sin adaptador (feeds de distribuidores, pools sectoriales),
   validadas pero no persistidas. Nombres de marca y slugs de fuente duplicados se rechazan.
 

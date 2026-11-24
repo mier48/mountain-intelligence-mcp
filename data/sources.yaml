@@ -577,41 +577,53 @@ sources:
     config: {discovery: sitemap, sitemap_url: "https://montane.com/sitemap.xml", url_include: ["/products/"], default_category: hardshell_jacket, max_urls: 200}
 
   - slug: altus-website
-    name: Altus official website (Shopify, JSON-LD)
+    # First FULL-CATALOG source: every product page in the store's product sitemaps is ingested.
+    # Products that match no technical category are published as `uncategorized` with their original
+    # metadata (type, tags, collections, variants, SKU/GTIN, prices, availability, images).
+    name: Altus official website (Shopify storefront, full catalog)
     brand: Altus
     source_type: manufacturer_website
-    adapter: jsonld_product
+    adapter: shopify_product
     base_url: https://wearealtus.com/
     allowed_domains: [wearealtus.com]
     access_status: terms_permit
     terms_reviewed_at: 2026-11-24
     access_notes: >-
-      robots.txt (reviewed 2026-11-24) allows product pages for all crawlers and lists the sitemap; it also
-      contains text addressed to AI agents (treated as untrusted, ignored). Website terms not reviewed in
-      detail. Operator decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): extraction of public
-      product specifications from the official site permitted for this service; revisit if the brand
-      objects or its terms change.
+      robots.txt (reviewed 2026-11-24) allows product pages and the storefront product JSON for all
+      crawlers and lists the sitemap; it also contains text addressed to AI agents (treated as untrusted,
+      ignored). Website terms not reviewed in detail. Operator decision 2026-11-24 (Alberto Mier, LTR
+      Digital Solutions): extraction of public product data from the official site permitted for this
+      service; revisit if the brand objects or its terms change.
     references: [https://wearealtus.com/robots.txt]
     enabled: true
     auto_publish: true
     sync_frequency_hours: 168
-    categories: [backpack, hardshell_jacket, insulated_jacket, midlayer, hiking_boot, crampon, ice_axe, climbing_helmet]
+    categories: []   # unrestricted: the whole manufacturer catalog
     config:
-      discovery: sitemap
-      sitemap_url: https://wearealtus.com/sitemap.xml   # Shopify index; products under /products/<handle>
-      # Spanish product URLs only (the /en/ copies are duplicates), filtered to the categories above.
-      url_include:
-        - '^https://wearealtus\.com/products/[a-z0-9-]*(mochila|backpack|chaqueta|jacket|plumas|plumifero|anorak|parka|forro|polar|fleece|bota|boot|crampon|piolet|casco|helmet)[a-z0-9-]*$'
-      category_rules:   # first match wins (on URL + JSON-LD category)
-        - {pattern: "mochila|backpack", category: backpack}
-        - {pattern: "crampon", category: crampon}
-        - {pattern: "piolet", category: ice_axe}
-        - {pattern: "casco|helmet", category: climbing_helmet}
-        - {pattern: "bota|boot", category: hiking_boot}
-        - {pattern: "plumas|plumifero|down|primaloft|parka|insulated|aislante", category: insulated_jacket}
-        - {pattern: "forro|polar|fleece", category: midlayer}
-        - {pattern: "chaqueta|jacket|anorak|impermeable", category: hardshell_jacket}
-      max_urls: 400
+      sitemap_url: https://wearealtus.com/sitemap.xml   # index -> products / pages / collections (+ /en/ copies)
+      sitemap_include: ['sitemap_products_\d+\.xml']    # /en/ product sitemap collapses into the same URLs
+      product_url_patterns: ['^https://wearealtus\.com/products/[^/.]+$']
+      canonical_host: wearealtus.com
+      max_urls: 20000
+      max_sitemaps: 20
+      batch_size: 250               # ~10-20 min per run at the polite crawl delay; cycles resume
+      batch_interval_minutes: 0     # next scheduler tick while a cycle is in progress
+      capture_offers: true
+      currency: EUR
+      description_attributes: true  # "Name: value" characteristics only; the description is not stored
+      collections: {enabled: true, max_collections: 200, cache_hours: 24}
+      # Conservative classification (first match wins; matched on URL, title, product type, tags and
+      # collections). Anything else stays `uncategorized` instead of being forced into a schema.
+      category_rules:
+        - {pattern: '\b(mochilas?|backpacks?)\b', category: backpack}
+        - {pattern: '\bcrampon(es|s)?\b', category: crampon}
+        - {pattern: '\b(piolets?|ice[ -]?axes?)\b', category: ice_axe}
+        - {pattern: '\b(cascos?|helmets?)\b', category: climbing_helmet}
+        - {pattern: '\bplum[ií]feros?\b|^(?=.*\b(chaquetas?|jackets?|parkas?)\b)(?=.*\b(plumas?|down|primaloft|aislantes?|insulated)\b)', category: insulated_jacket}
+        - {pattern: '\bforros? polar(es)?\b|^(?=.*\b(chaquetas?|jackets?|sudaderas?)\b)(?=.*\b(polar(es)?|fleece)\b)', category: midlayer}
+        - {pattern: '^(?=.*\b(chaquetas?|jackets?|anoraks?)\b)(?=.*\b(impermeables?|waterproof|gore-?tex|hardshell)\b)', category: hardshell_jacket}
+        - {pattern: '\bbotas? de (alta monta[ñn]a|alpinismo)\b|\bmountaineering boots?\b', category: mountaineering_boot}
+        - {pattern: '\b(botas?|boots?)\b', category: hiking_boot}
 
   - slug: operator-structured-import
     name: Authorized structured dataset delivered to the operator

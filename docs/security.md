@@ -53,11 +53,16 @@
   peticiones condicionales ETag/Last-Modified.
 - Una fuente solo se sincroniza si está habilitada **y** su `access_status` es `authorized` o `terms_permit`
   (validación en YAML, comprobación en código y restricción `CHECK` en la base de datos).
+- El descubrimiento de catálogo completo y el adaptador Shopify usan el mismo `SafeFetcher` para todo
+  (sitemaps, `/products/<handle>.js`, páginas, colecciones): mismo allowlist de dominio, `robots.txt`, pausa por
+  dominio, tamaños máximos y descompresión acotada. Topes adicionales: `max_sitemaps`, `max_urls`, páginas de
+  colección y lotes (`batch_size`); alcanzarlos marca la ejecución como incompleta en lugar de truncar en
+  silencio. Las URLs de imágenes y fichas solo se aceptan si son http(s) absolutas.
 
 ## Contenido externo no confiable
 
-- Los adaptadores solo leen metadatos estructurados (`ld+json`); descripciones y texto comercial no se
-  almacenan. Cualquier texto externo se valida contra el esquema y se recorta; nunca se ejecutan instrucciones
+- Los adaptadores solo leen metadatos estructurados (`ld+json`, JSON del escaparate); descripciones y texto
+  comercial no se almacenan (con `description_attributes` solo se guardan pares breves `Nombre: valor`). Cualquier texto externo se valida contra el esquema y se recorta; nunca se ejecutan instrucciones
   encontradas en él (la evaluación de fuentes detectó un `robots.txt` con texto dirigido a agentes de IA).
 - Los errores de herramientas no devuelven trazas, HTML ni secretos.
 

@@ -9,10 +9,11 @@ datos estructurados, reproducibles y con procedencia. No necesita ninguna clave 
 > **Estado (MVP 0.1.0).** Cadena completa operativa: registro de fuentes → ingesta → normalización →
 > validación → revisión → publicación → búsqueda / comparación / recomendación / compatibilidad por MCP
 > (stdio y Streamable HTTP). El catálogo incluido es **sintético** (marcas y productos inventados) y está
-> excluido de las respuestas salvo que se active `MI_INCLUDE_SYNTHETIC_DATA=true`. **Ninguna fuente real
-> está habilitada**: el registro (`data/sources.yaml`) documenta 27 marcas, 14 fuentes preconfiguradas y
-> 6 rutas de datos candidatas, pero no se ha encontrado una autorización verificable de reutilización
-> (ver [docs/source-evaluation.md](docs/source-evaluation.md)). Perfiles de actividad disponibles:
+> excluido de las respuestas salvo que se active `MI_INCLUDE_SYNTHETIC_DATA=true`. El registro
+> (`data/sources.yaml`) documenta 27 marcas, 15 fuentes y 6 rutas de datos candidatas; las webs oficiales
+> habilitadas lo están por decisión del operador (`terms_permit`, ver
+> [docs/source-evaluation.md](docs/source-evaluation.md)). Altus es la primera fuente de **catálogo
+> completo** (todas sus fichas, clasificadas o como `uncategorized`). Perfiles de actividad disponibles:
 > `winter_mountaineering`, `summer_alpine_mountaineering`, `winter_hiking`, `hiking_trekking` y
 > `trail_running`, con referencias publicadas y pendientes de revisión experta.
 
@@ -37,7 +38,7 @@ HTTP sobre las mismas nueve herramientas. PostgreSQL es la fuente de verdad (bú
 trigramas, especificaciones en JSONB validadas con Pydantic). Celery + Redis ejecutan la ingesta programada.
 
 ```
-fuentes autorizadas ─► adaptadores (JSON/CSV, JSON-LD) ─► normalización + validación ─► revisión ─► PostgreSQL
+fuentes autorizadas ─► adaptadores (JSON/CSV, JSON-LD, Shopify) ─► normalización + validación ─► revisión ─► PostgreSQL
                                                                                              │
 CLI de operación (manage.py) ───────────────────────────────────────────────────────────────┤
 Celery beat ─► worker ─► pipeline de ingesta                                                │
@@ -51,9 +52,9 @@ Celery beat ─► worker ─► pipeline de ingesta                            
 
 | Paquete | Responsabilidad |
 |---|---|
-| `catalog/` | Taxonomía declarativa (10 categorías), unidades, normalización, modelos, búsqueda y comparación |
+| `catalog/` | Taxonomía declarativa (10 categorías técnicas + `uncategorized`), unidades, normalización, modelos, búsqueda y comparación |
 | `sources/` | Fuentes, registros de fuente, evidencias por campo, registro YAML de marcas/fuentes |
-| `ingestion/` | Contratos de adaptadores, fetcher seguro (SSRF), pipeline idempotente, revisión, tareas Celery |
+| `ingestion/` | Contratos de adaptadores, descubrimiento por sitemaps, fetcher seguro (SSRF), pipeline idempotente por lotes, revisión, tareas Celery |
 | `recommendations/` | Perfiles de actividad versionados, motor de recomendación, compatibilidad bota/crampón |
 | `offers/` | Ofertas e histórico de precios (independientes del catálogo técnico) |
 | `mcp_server/` | Herramientas MCP, contratos tipados, transporte HTTP (auth, rate limit, Host/Origin) |
@@ -349,6 +350,8 @@ docker compose ps                                   # estado y healthchecks
 docker compose logs -f --since 10m mountain-intelligence-mcp caddy
 docker compose exec mountain-intelligence-mcp python manage.py list_sources
 docker compose exec mountain-intelligence-mcp python manage.py validate_catalog
+# Clasificar a mano un producto sin clasificar (queda auditado):
+docker compose exec mountain-intelligence-mcp python manage.py classify_product altus-decan-w-h30 midlayer --actor alberto --reason "Polar técnico"
 ```
 
 **Actualizar a una versión nueva** (las migraciones, perfiles y reglas se aplican solos vía `migrate`):
@@ -405,7 +408,56 @@ lee su sitemap (si es un índice, recorre todos los sitemaps hijos), se queda co
 `schema.org/Product` (JSON-LD). Solo sincroniza fuentes con `access_status: authorized` o `terms_permit`.
 
 Ejemplo ya configurado: `arcteryx-website` (solo fichas `https://arcteryx.com/es/es/shop/…`, precios en €).
-`altus-website` está preparada pero deshabilitada hasta decidir su `access_status`.
+
+### Catálogo completo de un fabricante (`categories: []`)
+
+El catálogo ya no está limitado a las 10 categorías técnicas. Una fuente con `categories: []` importa **todas**
+las fichas de producto que el fabricante publica en sus sitemaps, sin filtros por palabras clave ni listas de
+productos:
+
+- Cada producto se clasifica con `category_rules` (y `default_category` en fuentes antiguas). Si ninguna regla
+  casa, queda como **`uncategorized`**: se publica y se puede consultar por MCP (`search_products`,
+  `get_product`, `list_brands`), pero no tiene especificaciones validadas y **nunca** entra en
+  recomendaciones, comparaciones ni comprobaciones de compatibilidad.
+- Se conservan los metadatos originales: categoría del fabricante, `product_type`, etiquetas, colecciones,
+  identificadores externos, imágenes, características declaradas (`source_attributes`, sin normalizar),
+  variantes (SKU, GTIN, opciones de color/talla), precios y disponibilidad.
+- Las categorías técnicas mantienen sus esquemas estrictos. Un producto `uncategorized` que más tarde casa con
+  una regla (o se clasifica a mano con `classify_product`) pasa a esa categoría sin duplicarse; un producto ya
+  clasificado nunca vuelve a `uncategorized`.
+- Con `categories: [backpack, …]` la fuente sigue restringida: lo que se clasifique fuera de la lista se
+  descarta (`out_of_scope`).
+
+`altus-website` es la primera fuente de catálogo completo. Usa el adaptador **`shopify_product`**
+(reutilizable para cualquier tienda Shopify): lee los sitemaps de productos, colapsa duplicados por idioma
+(`/en/products/x`), colección (`/collections/c/products/x`), parámetros (`?variant=`) y barra final, y por
+cada producto lee el JSON público del escaparate (`/products/<handle>.js`): variantes, SKU, código de barras,
+precio, disponibilidad, imágenes, tipo, etiquetas. Opcionalmente añade el JSON-LD de la ficha (`jsonld: true`),
+las líneas `Nombre: valor` de la descripción (`description_attributes: true`; la descripción en sí no se
+guarda) y la pertenencia a colecciones como señal de clasificación (`collections: {enabled: true}`).
+
+```yaml
+  - slug: altus-website
+    adapter: shopify_product
+    allowed_domains: [wearealtus.com]
+    categories: []                              # sin restricción: todo el catálogo
+    config:
+      sitemap_url: https://wearealtus.com/sitemap.xml
+      sitemap_include: ['sitemap_products_\d+\.xml']
+      product_url_patterns: ['^https://wearealtus\.com/products/[^/.]+$']
+      batch_size: 250                           # lotes por ejecución; el siguiente lote continúa
+      capture_offers: true
+      currency: EUR
+      category_rules:                           # URL + título + tipo + etiquetas + colecciones
+        - {pattern: '\b(mochilas?|backpacks?)\b', category: backpack}
+```
+
+**Catálogos grandes y completitud.** Con `batch_size` cada ejecución procesa la siguiente ventana del
+descubrimiento (ordenado y sin duplicados) y guarda un cursor en la fuente; el scheduler la vuelve a lanzar
+hasta terminar el ciclo (`batch_interval_minutes`) y después espera `sync_frequency_hours`. Cada ejecución
+indica `discovery_complete` y `catalog_complete`; una ejecución parcial (lote intermedio, `--max-items`,
+sitemap hijo ilegible o tope `max_urls` alcanzado) termina en estado `incomplete` y **nunca** marca productos
+como desaparecidos. Repetir una sincronización es idempotente (ETag + hash del contrato extraído).
 
 ### 1. Configurar la fuente
 
@@ -454,13 +506,12 @@ Antes del `git pull`, los cambios deben estar subidos a GitHub (`git push` desde
 ```bash
 docker compose exec mountain-intelligence-mcp python manage.py sync_source arcteryx-website --dry-run --max-items 5
 docker compose exec mountain-intelligence-mcp python manage.py sync_source altus-website --dry-run --max-items 5
-
 ```
 
 Ejecuta todo el pipeline con 5 fichas y deshace los cambios. Revisa las métricas (`discovered`, `new`,
 `invalid`, `errors`) y los errores por URL. Si `discovered` es mayor que 0 pero no se extrae ningún producto,
-esa web no publica JSON-LD de producto utilizable. Ajusta `url_include`, `category_rules` o `property_map` y
-repite. Para probar una fuente aún con `enabled: false` (pero ya autorizada) añade `--test-disabled`.
+esa web no publica JSON-LD de producto utilizable (para tiendas Shopify usa `shopify_product`). Ajusta
+`url_include`/`product_url_patterns`, `category_rules` o `property_map` y repite. Para probar una fuente aún con `enabled: false` (pero ya autorizada) añade `--test-disabled`.
 
 ### 4. Carga real
 
@@ -469,6 +520,9 @@ repite. Para probar una fuente aún con `enabled: false` (pero ya autorizada) a�
 docker compose exec mountain-intelligence-mcp python manage.py sync_source arcteryx-website --max-items 50
 # Todos (hasta max_urls), en segundo plano a través del worker:
 docker compose exec mountain-intelligence-mcp python manage.py sync_source arcteryx-website --async
+# Catálogo completo por lotes (Altus): cada ejecución procesa el siguiente lote; repite hasta catalog_complete
+docker compose exec mountain-intelligence-mcp python manage.py sync_source altus-website
+docker compose exec mountain-intelligence-mcp python manage.py sync_source altus-website --restart-cycle   # empezar de cero
 docker compose logs -f worker      # para seguirlo
 docker compose exec mountain-intelligence-mcp python manage.py list_ingestion_runs --source arcteryx-website
 docker compose exec mountain-intelligence-mcp python manage.py list_ingestion_runs --errors
@@ -489,6 +543,8 @@ docker compose exec mountain-intelligence-mcp python manage.py list_review_items
 docker compose exec mountain-intelligence-mcp python manage.py review_item <id> --approve --actor alberto --reason "Ficha oficial Arc'teryx"
 docker compose exec mountain-intelligence-mcp python manage.py review_item <id> --reject --actor alberto --reason "No es producto técnico"
 docker compose exec mountain-intelligence-mcp python manage.py validate_catalog
+# Clasificar a mano un producto sin clasificar (queda auditado):
+docker compose exec mountain-intelligence-mcp python manage.py classify_product altus-decan-w-h30 midlayer --actor alberto --reason "Polar técnico"
 ```
 
 ### 6. Resincronización automática
@@ -593,13 +649,13 @@ Todas son de solo lectura (`readOnlyHint: true`), validan la entrada con esquema
 
 | Tool | Para qué |
 |---|---|
-| `list_categories` | Categorías, campos filtrables (tipo, unidad canónica, operadores, valores) y perfiles de actividad |
+| `list_categories` | Categorías (técnicas y `uncategorized`, con `technical`), campos filtrables (tipo, unidad canónica, operadores, valores) y perfiles de actividad |
 | `list_brands` | Marcas del catálogo con su número de productos publicados y las categorías que cubren; filtrable por categoría |
-| `search_products` | Texto es/en (sinónimos, SKU/MPN/GTIN) + filtros tipados `eq/in/gte/lte/contains…`, paginación estable |
-| `get_product` | Ficha completa: cada campo con unidad y evidencias (URL, fecha, estado), variantes, ofertas, fuentes |
-| `compare_products` | Matriz homogénea de 2–5 productos, desconocidos explícitos y limitaciones (peso por unidad/par, RET vs MVTR…) |
-| `recommend_products` | Filtros obligatorios + presupuesto, separación de candidatos a verificar, ranking explicado y versionado |
-| `check_compatibility` | Bota/crampón: `compatible / incompatible / conditional / unknown` con motivos, condiciones y evidencias |
+| `search_products` | Texto es/en (sinónimos, SKU/MPN/GTIN, categoría/tipo/etiquetas del fabricante) + filtros tipados `eq/in/gte/lte/contains…`, `classification` (`any/technical/uncategorized`), paginación estable |
+| `get_product` | Ficha completa: cada campo con unidad y evidencias (URL, fecha, estado), metadatos del fabricante, atributos declarados, variantes (SKU/GTIN/opciones), ofertas, disponibilidad, fuentes |
+| `compare_products` | Matriz homogénea de 2–5 productos clasificados, desconocidos explícitos y limitaciones (peso por unidad/par, RET vs MVTR…) |
+| `recommend_products` | Solo categorías técnicas. Filtros obligatorios + presupuesto, separación de candidatos a verificar (también los que no tienen ningún dato técnico), ranking explicado y versionado |
+| `check_compatibility` | Bota/crampón: `compatible / incompatible / conditional / unknown` con motivos, condiciones y evidencias; rechaza productos sin clasificar |
 | `get_activity_requirements` | Requisitos orientativos por actividad y condiciones, contexto que falta y estado de revisión del perfil |
 | `build_equipment_list` | Lista por categorías: lo que tienes, lo que falta y candidatos; total solo si todos los precios se conocen |
 
@@ -638,7 +694,8 @@ Sin interfaz web: toda la operación interna se hace con comandos (`python manag
 | `import_sources [ruta] [--check]` | Validar y aplicar `data/sources.yaml` (marcas y fuentes) |
 | `list_sources` | Estado de acceso, habilitación y última ejecución |
 | `set_source_status <slug> [--access …] [--enable/--disable] --actor --reason` | Cambios auditados de acceso/habilitación |
-| `sync_source <slug> [--dry-run] [--max-items N] [--async] [--test-disabled]` | Ejecutar o encolar una ingesta |
+| `sync_source <slug> [--dry-run] [--max-items N] [--batch-size N] [--restart-cycle] [--async] [--test-disabled]` | Ejecutar o encolar una ingesta (o el siguiente lote de un ciclo) |
+| `classify_product <product_id> <categoría> --actor --reason` | Clasificación manual auditada (p. ej. de `uncategorized` a una categoría técnica) |
 | `import_products <fichero> --source <slug> --actor … [--dry-run]` | Importación JSON/CSV autorizada |
 | `list_ingestion_runs [--source] [--errors]` | Métricas y errores de ejecuciones |
 | `list_review_items [--status] [--kind] [--product]` | Cola de revisión |
@@ -656,15 +713,21 @@ uv run pytest                       # requiere PostgreSQL accesible (crea test_m
 uv run pytest -m "not protocol"     # sin las pruebas que lanzan procesos MCP reales
 ```
 
-145 pruebas (más 1 de integración real opcional, desactivada por defecto): unidades y normalización, pipeline (idempotencia, historial, revisión, regresiones de
-generación/peso/precio/certificaciones), JSON-LD y seguridad de red (SSRF, redirecciones, DNS rebinding,
+Más de 170 pruebas (más 1 de integración real opcional, desactivada por defecto): unidades y normalización,
+pipeline (idempotencia, historial, revisión, regresiones de generación/peso/precio/certificaciones),
+catálogo universal (descubrimiento completo, URLs canónicas, adaptador Shopify, `uncategorized`, lotes,
+completitud, reclasificación progresiva, exclusión de recomendaciones), JSON-LD y seguridad de red (SSRF, redirecciones, DNS rebinding,
 tamaño, reintentos, robots.txt), búsqueda, comparación, recomendación, compatibilidad (4 estados), CLI,
 programación, y protocolo MCP real en stdio y Streamable HTTP (auth, Host/Origin). Resultados y método en
 [docs/verification.md](docs/verification.md).
 
 ## Limitaciones
 
-- Sin fuentes reales habilitadas: el catálogo publicado real está vacío hasta disponer de permisos o feeds.
+- Las fuentes reales dependen de una decisión del operador sobre sus términos (`terms_permit`), no de un
+  acuerdo con cada marca. Solo Altus importa el catálogo completo; el resto mantiene su alcance por categorías
+  (migrarlas es cambiar a `categories: []` y quitar los filtros de palabras clave de `url_include`).
+- Los productos `uncategorized` solo tienen datos de catálogo: sus atributos declarados no se validan ni se
+  usan como especificaciones técnicas hasta que se clasifican.
 - Los perfiles de actividad están marcados `pending_expert_review`; cada respuesta lo advierte.
 - La autenticación HTTP es por token estático o acceso público; OAuth 2.1 de MCP (necesario para restringir
   el acceso a ChatGPT) está en el backlog.

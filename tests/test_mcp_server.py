@@ -139,3 +139,14 @@ def test_every_tool_end_to_end(demo_catalog):
         },
     ).structured_content
     assert {i["category"] for i in eq["data"]["items"]} >= {"crampon", "mountaineering_boot"}
+
+
+def test_uncategorized_is_listed_but_not_accepted_where_technical_data_is_required(demo_catalog):
+    r = call("list_categories", {})
+    cats = {c["slug"]: c for c in r.structured_content["data"]["categories"]}
+    assert cats["uncategorized"]["technical"] is False and cats["uncategorized"]["fields"] == []
+    assert all(c["technical"] for slug, c in cats.items() if slug != "uncategorized")
+    rec = call("recommend_products", {"activity": "winter_mountaineering", "category": "uncategorized"})
+    assert rec.is_error  # rejected by the input schema (technical categories only)
+    search = call("search_products", {"category": "uncategorized", "classification": "uncategorized"})
+    assert not search.is_error and search.structured_content["status"] == "insufficient_data"

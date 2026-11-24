@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from ..contracts import DiscoveredItem, ExtractedProduct, FetchedDocument
 
@@ -29,6 +29,18 @@ class AdapterContext:
     fetcher: SafeFetcher | None = None
     max_items: int | None = None
     warnings: list[str] = field(default_factory=list)
+    # Set to False by an adapter whose discovery did not cover the whole catalog (unreadable
+    # child sitemap, exhausted budget, safety cap). An incomplete discovery never flags products
+    # as missing and the run is never reported as a complete synchronization.
+    discovery_complete: bool = True
+    discovery_notes: list[str] = field(default_factory=list)
+    state: dict[str, Any] = field(default_factory=dict)  # per-run adapter scratch space
+
+    def record_discovery(self, result: Any) -> None:
+        if not result.complete:
+            self.discovery_complete = False
+        self.discovery_notes.extend(result.notes)
+        self.warnings.extend(result.notes)
 
 
 class SourceAdapter(Protocol):
@@ -53,7 +65,7 @@ def register(adapter: SourceAdapter) -> SourceAdapter:
 
 
 def get_adapter(key: str) -> SourceAdapter:
-    from . import jsonld, structured  # noqa: F401  (registration side effects)
+    from . import jsonld, shopify, structured  # noqa: F401  (registration side effects)
 
     try:
         return _REGISTRY[key]
@@ -62,9 +74,15 @@ def get_adapter(key: str) -> SourceAdapter:
 
 
 def available_adapters() -> list[str]:
-    from . import jsonld, structured  # noqa: F401
+    from . import jsonld, shopify, structured  # noqa: F401
 
     return sorted(_REGISTRY)
+
+
+def canonical_key(adapter: SourceAdapter, external_id: str, cfg: dict[str, Any]) -> str:
+    """Identity an adapter would assign today to a record stored under ``external_id``."""
+    fn = getattr(adapter, "canonical_key", None)
+    return fn(external_id, cfg) if fn else external_id
 
 
 def limited(items: Iterable[DiscoveredItem], limit: int | None) -> Iterator[DiscoveredItem]:

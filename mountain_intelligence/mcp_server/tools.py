@@ -46,13 +46,16 @@ from .schemas import (
     ProductDetailResult,
     RecommendProductsResult,
     SearchProductsResult,
+    TechnicalCategorySlug,
 )
 
 logger = logging.getLogger(__name__)
 
 INSTRUCTIONS = """\
-Mountain Intelligence: read-only technical catalog of mountain/outdoor equipment (boots, crampons,
-packs, shells...). Use the tools instead of guessing specifications.
+Mountain Intelligence: read-only catalog of mountain/outdoor equipment. Technical categories (boots,
+crampons, packs, shells...) carry validated specifications; manufacturers' full catalogs also include
+`uncategorized` products (catalog data only: manufacturer category, type, tags, variants, SKU/GTIN,
+prices, availability, images, original declared attributes). Use the tools instead of guessing.
 
 Workflow: list_categories (fields, units, operators) / list_brands -> search_products / get_product ->
 compare_products, recommend_products, check_compatibility, get_activity_requirements,
@@ -60,9 +63,10 @@ build_equipment_list. Answers are structured and traceable (sources, dates, evid
 
 Rules for the assistant: values are normalized to canonical units (g, mm, l, EUR). null means
 UNKNOWN (never false/zero). Respect `warnings`: unreviewed activity profiles, synthetic demo data,
-stale data or pending reviews must be mentioned to the user. Compatibility 'conditional' is NOT a
-confirmation. Nothing here assesses whether a route or activity is safe. Queries may be in Spanish
-or English; product names keep their original language.
+stale data or pending reviews must be mentioned to the user. `source_attributes` are the manufacturer's
+own unvalidated statements. Uncategorized products are never recommended, compared or checked for
+compatibility. Compatibility 'conditional' is NOT a confirmation. Nothing here assesses whether a route
+or activity is safe. Queries may be in Spanish or English; product names keep their original language.
 """
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
@@ -159,6 +163,7 @@ def build_server() -> MCPServer:
                         name_es=definition.name_es,
                         family=definition.family,
                         schema_version=definition.schema_version,
+                        technical=definition.technical,
                         published_products=counts.get(slug, 0),
                         fields=[FieldInfo(**f.describe()) for f in definition.fields],
                         importance_for_activity=importance.get(slug),
@@ -231,14 +236,25 @@ def build_server() -> MCPServer:
         ] = None,
         limit: Annotated[int, Field(ge=1, le=25)] = 10,
         cursor: Annotated[str | None, Field(max_length=200, description="next_cursor from a previous page")] = None,
+        classification: Annotated[
+            Literal["any", "technical", "uncategorized"],
+            Field(description="Restrict to technically classified products or to `uncategorized` ones"),
+        ] = "any",
     ) -> SearchProductsResult:
-        """Search the published catalog combining text (Spanish/English synonyms, SKU/MPN/GTIN exact match)
-        with typed specification filters and stable pagination. Returns compact summaries with known key
-        specifications, data coverage, lowest recent EUR price (if any), freshness and source URL."""
+        """Search the published catalog combining text (Spanish/English synonyms, SKU/MPN/GTIN exact match,
+        manufacturer category/type/tags) with typed specification filters and stable pagination. Returns
+        compact summaries with known key specifications, technical classification, data coverage, lowest
+        recent EUR price (if any), freshness and source URL."""
 
         def body() -> SearchProductsResult:
             result = queries.search_products(
-                query=query, category=category, brands=brands, filters=filters, limit=limit, cursor=cursor
+                query=query,
+                category=category,
+                brands=brands,
+                filters=filters,
+                limit=limit,
+                cursor=cursor,
+                classification=classification,
             )
             warnings = result["warnings"]
             status = "ok" if result["items"] else "insufficient_data"
@@ -268,9 +284,11 @@ def build_server() -> MCPServer:
         variant: Annotated[str | None, Field(max_length=80, description="Optional SKU/GTIN/MPN of a variant")] = None,
         include_evidence: bool = True,
     ) -> ProductDetailResult:
-        """Full technical sheet of one product: every schema field with value or null (unknown), canonical
-        unit, per-field evidence (source URL, observation date, verification status), variants, recent offers,
-        sources, freshness and review warnings."""
+        """Full sheet of one product: every schema field with value or null (unknown), canonical unit,
+        per-field evidence (source URL, observation date, verification status), manufacturer metadata
+        (original category, type, tags, collections, identifiers, images, declared attributes), variants with
+        SKU/GTIN/options, recent offers and availability, sources, freshness and review warnings. Works for
+        `uncategorized` products too (no specifications, catalog data only)."""
 
         def body() -> ProductDetailResult:
             try:
@@ -292,7 +310,8 @@ def build_server() -> MCPServer:
     def compare_products(
         product_ids: Annotated[list[str], Field(min_length=2, max_length=5, description="2-5 product ids")],
     ) -> CompareProductsResult:
-        """Side-by-side matrix of homologous fields for 2-5 products of the same category/family. Unknown
+        """Side-by-side matrix of homologous fields for 2-5 technically classified products of the same
+        category/family (uncategorized products cannot be compared). Unknown
         values are explicit; limitations flag non-comparable data (weight per unit vs per pair, different
         reference sizes, RET vs MVTR, different test protocols)."""
 
@@ -317,7 +336,7 @@ def build_server() -> MCPServer:
     @mcp.tool(annotations=READ_ONLY, title="Recommend products for an activity")
     def recommend_products(
         activity: ActivityKey,
-        category: CategorySlug,  # type: ignore[valid-type]
+        category: TechnicalCategorySlug,  # type: ignore[valid-type]
         conditions: Annotated[Conditions | None, Field(description="Known conditions; omit unknown values")] = None,
         experience: Experience | None = None,
         budget_eur: Annotated[float | None, Field(gt=0, le=20000)] = None,
@@ -331,7 +350,8 @@ def build_server() -> MCPServer:
     ) -> RecommendProductsResult:
         """Deterministic, explained recommendation. Mandatory profile requirements, required_features and
         budget EXCLUDE candidates; candidates with unknown mandatory data or unknown price (when a budget is
-        given) are returned separately in `requires_verification`, never as recommended. Ranking uses
+        given) are returned separately in `requires_verification`, never as recommended; so are candidates
+        without any known key specification. Uncategorized products are never candidates. Ranking uses
         versioned weights (technical fit, weight, price, preferences) with a per-candidate breakdown.
         The assistant writes the final advice; this tool does not assess route safety."""
 

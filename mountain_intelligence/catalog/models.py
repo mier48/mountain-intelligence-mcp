@@ -48,6 +48,9 @@ class Category(models.Model):
     name_es = models.CharField(max_length=120)
     family = models.CharField(max_length=60)
     schema_version = models.PositiveIntegerField(default=1)
+    technical = models.BooleanField(
+        default=True, help_text="False for the `uncategorized` fallback (no technical specification schema)"
+    )
 
     class Meta:
         ordering = ["slug"]
@@ -71,6 +74,14 @@ class Product(models.Model):
         MISSING_AT_SOURCE = "missing_at_source"
         FETCH_ERROR = "fetch_error"
 
+    class CategoryBasis(models.TextChoices):
+        UNKNOWN = "", "Not recorded (products created before classification tracking)"
+        EXPLICIT = "explicit", "Category declared by an authorized structured source"
+        RULE = "rule", "Matched a source classification rule"
+        DEFAULT = "default", "Source default category"
+        FALLBACK = "fallback", "No rule matched: uncategorized fallback"
+        REVIEW = "review", "Set by a reviewer"
+
     public_id = models.SlugField(max_length=200, unique=True, help_text="Stable identifier exposed over MCP")
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, related_name="products")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products")
@@ -90,6 +101,20 @@ class Product(models.Model):
     source_status = models.CharField(max_length=30, choices=SourceStatus.choices, default=SourceStatus.OK)
     source_status_since = models.DateTimeField(null=True, blank=True)
     pending_review_fields = ArrayField(models.CharField(max_length=80), default=list, blank=True)
+    category_basis = models.CharField(max_length=20, choices=CategoryBasis.choices, blank=True, default="")
+    # Manufacturer catalog metadata, preserved as published by the source (not normalized). The
+    # technical `specifications` above only ever hold schema-validated values.
+    source_category = models.CharField(max_length=300, blank=True, help_text="Manufacturer's own category/path")
+    product_type = models.CharField(max_length=120, blank=True, help_text="Manufacturer's product type")
+    tags = ArrayField(models.CharField(max_length=80), default=list, blank=True)
+    collections = ArrayField(
+        models.CharField(max_length=80), default=list, blank=True, help_text="Manufacturer collections (handles)"
+    )
+    external_ids = models.JSONField(default=dict, blank=True, help_text="Identifiers at the source (e.g. Shopify)")
+    images = models.JSONField(default=list, blank=True, help_text="[{url, alt, position, variant_skus}]")
+    source_attributes = models.JSONField(
+        default=list, blank=True, help_text="Original declared characteristics [{name, value, unit, locator, source}]"
+    )
     last_verified_at = models.DateTimeField(null=True, blank=True)
     published_at = models.DateTimeField(null=True, blank=True)
     search_document = models.TextField(blank=True)
@@ -108,6 +133,7 @@ class Product(models.Model):
             GinIndex(fields=["search_document"], opclasses=["gin_trgm_ops"], name="product_search_trgm"),
             GinIndex(fields=["specifications"], opclasses=["jsonb_path_ops"], name="product_specs_gin"),
             models.Index(fields=["category", "publication_status", "data_status"], name="product_scope_idx"),
+            GinIndex(fields=["tags"], name="product_tags_gin"),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -143,6 +169,9 @@ class ProductVariant(models.Model):
     size_label = models.CharField(max_length=40, blank=True)
     size_eu = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
     color = models.CharField(max_length=80, blank=True)
+    external_id = models.CharField(max_length=100, blank=True, help_text="Variant id at the source")
+    options = models.JSONField(default=dict, blank=True, help_text="Original option name -> value")
+    image_url = models.URLField(max_length=1000, blank=True)
     spec_overrides = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -51,6 +51,26 @@ el buffering de respuestas en el proxy.
 > `import_sources` aplica el YAML como fuente de verdad: los cambios hechos con `set_source_status` deben
 > reflejarse también en el YAML versionado o se revertirán en la siguiente importación.
 
+### Catálogo completo de un fabricante
+
+1. Fuente con `categories: []` y descubrimiento estructural: `product_url_patterns` (p. ej.
+   `^https://tienda\.test/products/[^/.]+$`) y, si es un índice, `sitemap_include` para leer solo los sitemaps de
+   productos. Sin palabras clave de categoría en `url_include`.
+2. `category_rules` conservadoras (campo `any` = URL + título + tipo + etiquetas + colecciones; `field` para
+   acotar). Lo que no casa queda `uncategorized` y se publica igualmente.
+3. `max_urls` holgado (es un tope de seguridad: alcanzarlo hace la ejecución `incomplete`) y `batch_size` para
+   que cada ejecución quepa en `CELERY_TASK_TIME_LIMIT` (≈2–4 s por producto con la pausa por defecto).
+4. `sync_source <slug> --dry-run --max-items 10`, después ejecuciones reales. `list_ingestion_runs` muestra
+   `complete=yes/no` y el lote (`batch.already_done/total`). El scheduler encadena los lotes
+   (`batch_interval_minutes`) y luego espera `sync_frequency_hours`. `--restart-cycle` empieza de cero.
+5. Enriquecimiento progresivo: añadir reglas (los productos se reclasifican en la siguiente pasada sin
+   duplicarse) o `classify_product <product_id> <categoría> --actor … --reason …` (auditado como
+   `ReviewItem` `reclassification`). Buscar candidatos con `search_products` `classification=uncategorized`.
+
+Tiendas Shopify: adaptador `shopify_product` (ver docstring de `ingestion/adapters/shopify.py`):
+`capture_offers` + `currency`, `description_attributes`, `jsonld`, `collections`, `brand_from`
+(`source`/`vendor`), `property_map`.
+
 Añadir un adaptador nuevo: implementar `discover/fetch/extract` devolviendo `ExtractedProduct`, registrar con
 `register(...)` en `ingestion/adapters/` y cubrirlo con tests sobre fixtures. Nunca escribir en modelos desde
 el adaptador.
@@ -58,7 +78,8 @@ el adaptador.
 ## Añadir una categoría
 
 Añadir un `CategoryDefinition` en `catalog/taxonomy.py` (campos, unidades, alias, campos críticos,
-derivados y comprobaciones). Si se modifica una categoría existente, incrementar `schema_version`
+derivados y comprobaciones). Después, reglas en las fuentes de catálogo completo para que los productos
+`uncategorized` correspondientes pasen a la nueva categoría en la siguiente sincronización. Si se modifica una categoría existente, incrementar `schema_version`
 y ejecutar `validate_catalog`. Las tools MCP no cambian; `list_categories` refleja la nueva definición.
 
 ## Cola de revisión

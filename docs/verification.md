@@ -11,7 +11,8 @@ httpx2 2.16.2, selectolax 1.0.2 (lexbor), Starlette 1.10.0, uvicorn 0.54.0.
 | `ruff check .` / `ruff format --check .` | sin errores |
 | `manage.py makemigrations --check` | sin cambios pendientes |
 | Migraciones desde base vacía + `seed_demo_data` | OK; segunda ejecución: 34 `unchanged`, 0 nuevos |
-| `pytest` | **145 pruebas superadas** y 1 opcional omitida (integración con fuente real, `-m live_source`) (≈33 s) |
+| `pytest` | **177 pruebas superadas** y 1 opcional omitida (integración con fuente real, `-m live_source`) (≈70 s, Python 3.12) |
+| Migración desde la versión anterior | base creada con el código previo (registro, catálogo demo, producto Altus con su `SourceRecord`) ⇒ `migrate` aplica `catalog.0002`, `ingestion.0002`, `sources.0002`; productos, registros y búsqueda intactos; `uncategorized` creado; una sincronización Altus simulada reutiliza el registro existente (misma categoría) y añade los productos nuevos como `uncategorized` |
 | Protocolo MCP real, stdio | cliente oficial del SDK lanza `python -m mountain_intelligence.mcp_server stdio`: `initialize` (modo `legacy`) y descubrimiento moderno (`auto`), `tools/list` (9) y `tools/call` |
 | Protocolo MCP real, Streamable HTTP | servidor uvicorn en subproceso: mismos flujos con token; sin token/erróneo ⇒ 401; `Host` ajeno ⇒ 421/400; `Origin` ajeno ⇒ 403; sin tokens configurados el servidor no arranca |
 | Docker Compose (ver nota) | `docker compose up --wait`: los 5 servicios `healthy` y `migrate` con salida 0; `import_sources`, `seed_demo_data`, tarea Celery encolada con `sync_source --async` y procesada por el worker; `tools/call` vía `curl` con token; 401 sin token; `pg_dump`/`pg_restore` verificados (34 productos restaurados) |
@@ -55,9 +56,31 @@ reinicios.
   puntúan 0, contexto desconocido aplicado de forma conservadora, marcas preferidas, material en propiedad.
 - Compatibilidad: `compatible`, `conditional`, `incompatible` (tipos y talla), `unknown` (sin declaración y
   evidencia contradictoria), aserciones sintéticas ignoradas fuera de demo.
+- Catálogo universal: URLs canónicas (idiomas, rutas de colección, parámetros, barra final), descubrimiento
+  completo sin palabras clave, sitemaps no de producto no leídos, sitemap hijo ilegible o tope `max_urls` ⇒
+  descubrimiento incompleto, extracción Shopify (variantes, opciones, GTIN válido/no válido, precio en céntimos,
+  disponibilidad, imágenes por variante, etiquetas, ids externos, atributos `Nombre: valor` sin prosa),
+  reglas de clasificación por campo y respaldo `uncategorized`, reglas reales de Altus (casos positivos y
+  falsos positivos evitados), publicación y búsqueda de `uncategorized`, ficha con metadatos y disponibilidad,
+  idempotencia (ETag/304 y hash), lotes con cursor y reanudación, ciclo completo solo al final, scheduler por
+  lotes, ejecuciones truncadas sin marcar ausencias, reactivación al reaparecer, alcance restringido
+  (`out_of_scope`), reclasificación progresiva sin duplicados y sin degradación, re-identificación de registros
+  antiguos, importación estructurada `uncategorized`, exclusión de recomendaciones/comparación/compatibilidad/
+  filtros, productos sin datos técnicos nunca recomendados, validación del registro, `classify_product` auditado
+  y exposición MCP (`list_categories`, `recommend_products`, `search_products`).
 - CLI y operación: registro de fuentes y restricción de habilitación (también a nivel BD), importación con
   dry-run, cola de revisión, ejecuciones, `validate_catalog --strict`, versionado de perfiles, despachador
   programado, redacción de secretos en logs.
+
+### Sin verificar en este entorno: Altus en vivo
+
+El entorno de desarrollo no tiene salida de red hacia `wearealtus.com` (proxy 403), así que la sincronización
+real no se ha ejecutado aquí. Lo que sí se comprobó desde fuera (2026-11-24): el `sitemap.xml` es un índice
+Shopify con `sitemap_products_1.xml` y su copia `/en/`, colecciones, páginas y blogs; `robots.txt` permite
+`/products/` y contiene texto dirigido a agentes de IA (ignorado); el JSON público de producto
+(`/products/<handle>.js`) expone variantes con SKU, código de barras, precio en céntimos, disponibilidad,
+opciones Color/Talla, etiquetas e imágenes, que es el formato que cubren las pruebas con fixtures sintéticos.
+Primera prueba recomendada en el servidor: `sync_source altus-website --dry-run --max-items 10`.
 
 ## Rendimiento medido
 

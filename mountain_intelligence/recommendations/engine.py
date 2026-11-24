@@ -24,7 +24,12 @@ from mountain_intelligence.catalog.queries import (
     product_summary,
 )
 from mountain_intelligence.catalog.services import brand_slug, coverage, spec_value, visible_products
-from mountain_intelligence.catalog.taxonomy import CATEGORIES, CategoryDefinition, get_category
+from mountain_intelligence.catalog.taxonomy import (
+    CATEGORIES,
+    TECHNICAL_CATEGORIES,
+    CategoryDefinition,
+    get_category,
+)
 from mountain_intelligence.offers.services import comparable_price_eur
 
 from . import criteria
@@ -119,6 +124,11 @@ def recommend(
     if category not in CATEGORIES:
         raise QueryValidationError(f"unknown category {category!r}")
     definition = get_category(category)
+    if not definition.technical:
+        raise QueryValidationError(
+            f"{category!r} products have no technical classification: recommendations need a technical "
+            f"category ({sorted(TECHNICAL_CATEGORIES)})"
+        )
     profile, pdef = resolve_profile(activity)
     warnings = context_warnings(pdef, conditions)
     if experience is None:
@@ -188,6 +198,12 @@ def recommend(
         if any(r is False for r in results):
             excluded.append(cand)
         elif any(r is None for r in results):
+            verify.append(cand)
+        elif cand.coverage == 0:
+            # Without a single known key specification nothing technical can be asserted.
+            cand.checks.append(
+                Check("technical data", None, "no key technical specification is known for this product", "profile")
+            )
             verify.append(cand)
         elif need is not None and cand.coverage < need.min_coverage:
             cand.checks.append(

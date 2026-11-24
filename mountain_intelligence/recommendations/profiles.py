@@ -112,6 +112,8 @@ class CategoryNeed(BaseModel):
         definition = CATEGORIES.get(self.category)
         if definition is None:
             raise ValueError(f"unknown category {self.category!r}")
+        if not definition.technical:
+            raise ValueError(f"{self.category!r} has no technical schema and cannot be an activity need")
         for crit in [*self.requirements, *self.preferences]:
             spec = definition.field_map.get(crit.field)
             if spec is None:

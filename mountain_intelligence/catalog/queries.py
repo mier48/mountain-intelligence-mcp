@@ -18,14 +18,14 @@ from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Cast
 from pydantic import BaseModel, ConfigDict, Field
 
-from mountain_intelligence.offers.services import comparable_price_eur, current_offers
+from mountain_intelligence.offers.services import availability_summary, comparable_price_eur, current_offers
 from mountain_intelligence.sources.models import SourceRecord, SpecificationEvidence
 
 from .models import Brand, Product, ProductVariant
 from .normalization import FieldIssue, fold, normalize_value
 from .services import coverage, find_by_identifier, freshness, spec_value, tokens, visible_products
 from .synonyms import STOPWORDS, expand
-from .taxonomy import CATEGORIES, CategoryDefinition, FieldSpec, FieldType, get_category
+from .taxonomy import CATEGORIES, UNCATEGORIZED_SLUG, CategoryDefinition, FieldSpec, FieldType, get_category
 from .units import UnitError
 
 MAX_LIMIT = 25
@@ -214,6 +214,7 @@ def search_products(
     limit: int = 10,
     cursor: str | None = None,
     include_synthetic: bool | None = None,
+    classification: Literal["any", "technical", "uncategorized"] = "any",
 ) -> dict[str, Any]:
     include_synthetic = settings.MI_INCLUDE_SYNTHETIC_DATA if include_synthetic is None else include_synthetic
     limit = max(1, min(limit, MAX_LIMIT))
@@ -221,11 +222,20 @@ def search_products(
     warnings: list[str] = []
     if filters and not category:
         raise QueryValidationError("filters require a category (fields are category-specific)")
-    definition = get_category(category) if category else None
     if category and category not in CATEGORIES:
         raise QueryValidationError(f"unknown category {category!r}")
+    definition = get_category(category) if category else None
+    if definition is not None and not definition.technical and filters:
+        raise QueryValidationError(
+            "uncategorized products have no technical schema: specification filters are not available; "
+            "use the text query (manufacturer category, type, tags, declared attributes)"
+        )
 
     qs = visible_products(include_synthetic)
+    if classification == "technical":
+        qs = qs.exclude(category__slug=UNCATEGORIZED_SLUG)
+    elif classification == "uncategorized":
+        qs = qs.filter(category__slug=UNCATEGORIZED_SLUG)
     if definition:
         qs = qs.filter(category__slug=definition.slug)
         qs = apply_filters(qs, definition, filters)
@@ -263,6 +273,7 @@ def search_products(
         "b": sorted(brands or []),
         "f": [f.model_dump() for f in filters],
         "s": include_synthetic,
+        "t": classification,
     }
     offset = decode_cursor(cursor, params)
     qs = qs.distinct().order_by(*order, "brand__name", "name", "public_id")
@@ -274,6 +285,10 @@ def search_products(
     items = [product_summary(p, include_synthetic=include_synthetic) for p in page]
     if any(i["data_status"] == "synthetic_fixture" for i in items):
         warnings.append("results include SYNTHETIC demo fixtures, not real products")
+    if any(not i["technical_classification"] for i in items):
+        warnings.append(
+            "results include UNCATEGORIZED products: catalog data only (no validated technical specifications)"
+        )
     return {"items": items, "total": total, "next_cursor": next_cursor, "warnings": warnings}
 
 
@@ -295,6 +310,11 @@ def product_warnings(product: Product) -> list[str]:
     warnings = []
     if product.is_synthetic:
         warnings.append("SYNTHETIC demo fixture: not a real product")
+    if product.category.slug == UNCATEGORIZED_SLUG:
+        warnings.append(
+            "not technically classified (uncategorized): no validated specifications; excluded from "
+            "recommendations, comparisons and compatibility checks"
+        )
     if product.pending_review_fields:
         warnings.append(f"pending review for fields {product.pending_review_fields}: current values may be outdated")
     if product.source_status != Product.SourceStatus.OK:
@@ -308,12 +328,17 @@ def product_warnings(product: Product) -> list[str]:
 def product_summary(product: Product, *, include_synthetic: bool) -> dict[str, Any]:
     definition = get_category(product.category.slug)
     price = comparable_price_eur(product, include_synthetic=include_synthetic)
+    first_image = next((i.get("url") for i in product.images or [] if isinstance(i, dict) and i.get("url")), None)
     return {
         "product_id": product.public_id,
         "brand": product.brand.name,
         "name": product.name,
         "generation": product.generation or None,
         "category": product.category.slug,
+        "technical_classification": definition.technical,
+        "source_category": product.source_category or None,
+        "product_type": product.product_type or None,
+        "image_url": first_image,
         "key_specs": _key_specs(product, definition),
         "coverage": coverage(product, definition),
         "price_eur": float(price.amount) if price else None,
@@ -385,9 +410,12 @@ def product_detail(
             "size_label": v.size_label or None,
             "size_eu": float(v.size_eu) if v.size_eu is not None else None,
             "color": v.color or None,
+            "options": v.options or None,
+            "external_id": v.external_id or None,
+            "image_url": v.image_url or None,
             "has_spec_overrides": bool(v.spec_overrides),
         }
-        for v in product.variants.all()[:100]
+        for v in product.variants.all()[:200]
     ]
     offers = [
         {
@@ -398,6 +426,7 @@ def product_detail(
             "observed_at": o.observed_at.isoformat(),
             "url": o.url or None,
             "data_status": o.data_status,
+            "variant_sku": o.variant.sku if o.variant_id and o.variant else None,
         }
         for o in current_offers(product, include_synthetic=include_synthetic)
     ]
@@ -420,15 +449,29 @@ def product_detail(
         "generation": product.generation or None,
         "model_year": product.model_year,
         "category": product.category.slug,
+        "technical_classification": definition.technical,
+        "category_basis": product.category_basis or None,
         "category_schema_version": product.spec_schema_version,
         "mpn": product.mpn or None,
         "aliases": product.aliases,
         "summary": product.summary or None,
         "selected_variant": variant if selected else None,
         "specifications": specs,
+        "source_category": product.source_category or None,
+        "product_type": product.product_type or None,
+        "tags": product.tags,
+        "collections": product.collections,
+        "external_ids": product.external_ids or {},
+        "images": (product.images or [])[:50],
+        "source_attributes": [
+            {k: a.get(k) for k in ("name", "value", "unit", "source")}
+            for a in (product.source_attributes or [])[:150]
+            if isinstance(a, dict)
+        ],
         "coverage": coverage(product, definition),
         "variants": variants,
         "offers": offers,
+        "availability": availability_summary(product, include_synthetic=include_synthetic),
         "sources": sources,
         "data_status": product.data_status,
         "publication_status": product.publication_status,
@@ -450,6 +493,12 @@ def compare_products(product_ids: list[str], *, include_synthetic: bool | None =
         raise QueryValidationError("compare_products needs between 2 and 5 distinct product ids")
     products = [get_visible_product(pid, include_synthetic) for pid in ids]
     definitions = [get_category(p.category.slug) for p in products]
+    unclassified = [p.public_id for p, d in zip(products, definitions, strict=True) if not d.technical]
+    if unclassified:
+        raise QueryValidationError(
+            f"{unclassified} have no technical classification (uncategorized): there are no validated "
+            "specifications to compare; use get_product for their catalog data"
+        )
     families = {d.family for d in definitions}
     if len(families) != 1:
         raise QueryValidationError(f"products belong to unrelated categories {sorted(d.slug for d in definitions)}")

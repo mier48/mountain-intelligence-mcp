@@ -31,13 +31,20 @@ def run(*args, **kwargs) -> str:
     return out.getvalue()
 
 
-def test_source_registry_loads_disabled_and_is_idempotent():
+def test_source_registry_loads_and_is_idempotent():
     first = json.loads(run("import_sources", "--json"))
     second = json.loads(run("import_sources", "--json"))
-    assert first["sources_created"] == 14 and second["sources_updated"] == 14
+    total = Source.objects.count()
+    assert total == 15
+    assert first["sources_created"] == total and second["sources_updated"] == total
     assert first["brands"] == 27
-    assert not Source.objects.filter(enabled=True).exists()
-    assert Source.objects.get(slug="petzl-website").access_status == "restricted"
+    # only sources whose access allows it are enabled (also enforced by a DB constraint)
+    for source in Source.objects.filter(enabled=True):
+        assert source.access_status in Source.ACCESS_ALLOWING_SYNC
+    petzl = Source.objects.get(slug="petzl-website")
+    assert petzl.access_status == "restricted" and not petzl.enabled
+    altus = Source.objects.get(slug="altus-website")
+    assert altus.adapter == "shopify_product" and altus.categories == [] and altus.unrestricted_categories
     listing = json.loads(run("list_sources", "--json"))
     assert {r["slug"] for r in listing} >= {"petzl-website", "scarpa-website"}
 
@@ -55,10 +62,10 @@ def test_registry_rejects_enabled_unauthorized_source(tmp_path: Path):
 def test_enabling_requires_access_and_db_constraint():
     run("import_sources")
     with pytest.raises(CommandError, match="cannot enable"):
-        run("set_source_status", "scarpa-website", "--enable", "--actor", "alice", "--reason", "try")
+        run("set_source_status", "petzl-website", "--enable", "--actor", "alice", "--reason", "try")
     run(
         "set_source_status",
-        "scarpa-website",
+        "petzl-website",
         "--access",
         "authorized",
         "--enable",
@@ -67,7 +74,7 @@ def test_enabling_requires_access_and_db_constraint():
         "--reason",
         "written permission ref 2026-11-24",
     )
-    source = Source.objects.get(slug="scarpa-website")
+    source = Source.objects.get(slug="petzl-website")
     assert source.enabled and "written permission" in source.access_notes
     with pytest.raises(IntegrityError):
         Source.objects.filter(pk=source.pk).update(access_status="restricted")

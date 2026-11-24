@@ -3,15 +3,20 @@
 Source config keys (all optional unless stated):
 
 - ``discovery``: ``"sitemap"`` (default) or ``"urls"``
-- ``sitemap_url``: sitemap or sitemap index URL (sitemap discovery)
+- ``sitemap_url``: sitemap or sitemap index URL (sitemap discovery, see ``ingestion.discovery``
+  for ``sitemap_include``, ``product_url_patterns``, ``url_exclude``, ``max_sitemaps`` and URL
+  canonicalization)
 - ``urls``: explicit product URLs (urls discovery)
-- ``url_include``: regexes; only matching URLs are kept
-- ``max_urls``: hard cap of discovered URLs (default 200)
-- ``default_category`` / ``category_rules``: ``[{"pattern": regex, "category": slug}]`` on the URL
+- ``url_include``: legacy structural URL regexes; only matching URLs are kept
+- ``max_urls``: safety cap of discovered URLs (default 200; hitting it makes discovery incomplete)
+- ``default_category`` / ``category_rules``: see ``adapters.classification``; rules match the URL +
+  JSON-LD category by default. No match and no default -> ``uncategorized``.
 - ``property_map``: ``{"<additionalProperty name>": {"field": spec_field, "unit": "g"}}``
 - ``capture_offers``: store schema.org offers as price observations (default false)
 
-Only structured metadata is used. Descriptions and marketing copy are not stored.
+Only structured metadata is used. Descriptions and marketing copy are not stored. Every
+``additionalProperty`` is preserved as an original ``source_attribute``; only mapped ones become
+normalized specification candidates.
 """
 
 from __future__ import annotations
@@ -19,7 +24,6 @@ from __future__ import annotations
 import html
 import json
 import re
-import zlib
 from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -30,17 +34,20 @@ from selectolax.lexbor import LexborHTMLParser
 
 from ..contracts import (
     DiscoveredItem,
+    ExtractedImage,
     ExtractedOffer,
     ExtractedProduct,
     ExtractedVariant,
     FetchedDocument,
     FieldLocator,
+    SourceAttribute,
     gtin_is_valid,
 )
+from ..discovery import canonicalize_url, discover_from_sitemaps
 from ..http import FetchError
 from .base import AdapterContext, AdapterError, register
+from .classification import classify
 
-_LOC_RE = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.IGNORECASE)
 _AVAILABILITY = {
     "instock": "in_stock",
     "outofstock": "out_of_stock",
@@ -50,9 +57,6 @@ _AVAILABILITY = {
     "discontinued": "out_of_stock",
     "limitedavailability": "in_stock",
 }
-MAX_SITEMAP_DOCS = 20
-# Sitemap protocol limit (50 MB uncompressed per file); product pages keep INGESTION_MAX_RESPONSE_BYTES.
-MAX_SITEMAP_BYTES = 50 * 1024 * 1024
 
 
 def _types(node: dict[str, Any]) -> set[str]:
@@ -109,45 +113,31 @@ class JsonLdProductAdapter:
     needs_network = True
 
     # -- discovery ---------------------------------------------------------------------------
+    def canonical_key(self, external_id: str, cfg: dict[str, Any]) -> str:
+        return canonicalize_url(external_id, cfg) if external_id.startswith(("http://", "https://")) else external_id
+
     def discover(self, ctx: AdapterContext) -> Iterable[DiscoveredItem]:
         cfg = ctx.source.config
-        include = [re.compile(p) for p in cfg.get("url_include", [])]
-        max_urls = min(int(cfg.get("max_urls", 200)), 5000)
         if cfg.get("discovery", "sitemap") == "urls":
-            urls: Iterable[str] = cfg.get("urls", [])
-        else:
-            if not cfg.get("sitemap_url"):
-                raise AdapterError("sitemap discovery requires config.sitemap_url")
-            urls = self._sitemap_urls(str(cfg["sitemap_url"]), ctx)
-        seen: set[str] = set()
-        for url in urls:
-            if include and not any(p.search(url) for p in include):
-                continue
-            if url in seen:
-                continue
-            seen.add(url)
-            yield DiscoveredItem(external_id=url, url=url)
-            if len(seen) >= max_urls:
-                ctx.warnings.append(f"discovery capped at max_urls={max_urls}")
-                return
-
-    def _sitemap_urls(self, sitemap_url: str, ctx: AdapterContext) -> Iterator[str]:
-        assert ctx.fetcher is not None
-        pending, fetched = [sitemap_url], 0
-        while pending and fetched < MAX_SITEMAP_DOCS:
-            url = pending.pop(0)
-            fetched += 1
-            doc = ctx.fetcher.fetch(url, accept="application/xml,text/xml;q=0.9,*/*;q=0.5", max_bytes=MAX_SITEMAP_BYTES)
-            body = doc.body
-            if url.endswith(".gz") or body[:2] == b"\x1f\x8b":
-                # Bounded decompression: protects against gzip bombs.
-                body = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(body, MAX_SITEMAP_BYTES)
-            text = body.decode("utf-8", errors="replace")
-            locs = [html.unescape(m) for m in _LOC_RE.findall(text)]
-            if "<sitemapindex" in text[:2000].lower():
-                pending.extend(locs)
-                continue
-            yield from locs
+            include = [re.compile(p) for p in cfg.get("url_include", [])]
+            max_urls = min(int(cfg.get("max_urls", 200)), 50_000)
+            seen: set[str] = set()
+            for raw in cfg.get("urls", []):
+                url = canonicalize_url(str(raw), cfg)
+                if (include and not any(p.search(url) for p in include)) or url in seen:
+                    continue
+                if len(seen) >= max_urls:
+                    ctx.discovery_complete = False
+                    ctx.warnings.append(f"discovery capped at max_urls={max_urls}")
+                    return
+                seen.add(url)
+                yield DiscoveredItem(external_id=url, url=url)
+            return
+        if not cfg.get("sitemap_url") and not cfg.get("sitemap_urls"):
+            raise AdapterError("sitemap discovery requires config.sitemap_url")
+        result = discover_from_sitemaps(ctx, cfg)
+        ctx.record_discovery(result)
+        yield from result.items
 
     # -- fetch -------------------------------------------------------------------------------
     def fetch(
@@ -172,19 +162,10 @@ class JsonLdProductAdapter:
             raise AdapterError("no schema.org Product found in JSON-LD")
         return [self._to_contract(main, document, ctx)]
 
-    def _category(self, url: str, node: dict[str, Any], ctx: AdapterContext) -> str:
-        cfg = ctx.source.config
-        haystack = f"{url} {_text(node.get('category'))}"
-        for rule in cfg.get("category_rules", []):
-            if re.search(rule["pattern"], haystack, re.IGNORECASE):
-                return str(rule["category"])
-        if cfg.get("default_category"):
-            return str(cfg["default_category"])
-        raise AdapterError("cannot determine category (configure default_category or category_rules)")
-
     def _to_contract(self, node: dict[str, Any], doc: FetchedDocument, ctx: AdapterContext) -> ExtractedProduct:
         cfg = ctx.source.config
-        url = _text(node.get("url")) or doc.url
+        raw_url = _text(node.get("url"))
+        url = canonicalize_url(raw_url if raw_url.startswith(("http://", "https://")) else doc.url, cfg)
         property_map: dict[str, dict[str, str]] = {k.casefold(): v for k, v in cfg.get("property_map", {}).items()}
         specs: dict[str, Any] = {}
         locators: dict[str, FieldLocator] = {}
@@ -220,13 +201,17 @@ class JsonLdProductAdapter:
             if not isinstance(variant, dict):
                 continue
             try:
+                size, color = _text(variant.get("size"))[:40], _text(variant.get("color"))[:80]
+                images = jsonld_images(variant)
                 variants.append(
                     ExtractedVariant(
                         sku=_text(variant.get("sku"))[:80],
                         mpn=_text(variant.get("mpn"))[:80],
                         gtin=_first_gtin(variant),
-                        size_label=_text(variant.get("size"))[:40],
-                        color=_text(variant.get("color"))[:80],
+                        size_label=size,
+                        color=color,
+                        options={k: v for k, v in (("size", size), ("color", color)) if v},
+                        image_url=images[0].url if images else "",
                     )
                 )
             except ValidationError:
@@ -238,25 +223,53 @@ class JsonLdProductAdapter:
 
         brand = _text(node.get("brand")) or (ctx.source.brand.name if ctx.source.brand else "")
         external = _text(node.get("productGroupID")) or _text(node.get("sku")) or _text(node.get("mpn")) or url
+        name = _text(node.get("name"))[:200]
+        source_category = _source_category(node)
+        classification = classify(
+            cfg, default_field="url_and_category", url=url, name=name, source_category=source_category
+        )
+        external_ids = {
+            k: v[:300]
+            for k, v in (
+                ("jsonld_product_group_id", _text(node.get("productGroupID"))),
+                ("jsonld_sku", _text(node.get("sku"))),
+                ("jsonld_mpn", _text(node.get("mpn"))),
+            )
+            if v
+        }
         try:
             return ExtractedProduct(
                 external_id=external[:300],
                 canonical_url=url[:1000],
                 brand=brand[:120],
                 brand_domain=(ctx.source.brand.official_domain if ctx.source.brand else ""),
-                name=_text(node.get("name"))[:200],
-                category=self._category(url, node, ctx),
+                name=name,
+                category=classification.category,
+                category_basis=classification.basis,  # type: ignore[arg-type]
                 mpn=_text(node.get("mpn"))[:80],
                 specifications=specs,
                 locators=locators,
                 variants=variants,
                 offers=offers,
+                source_category=source_category,
+                external_ids=external_ids,
+                images=jsonld_images(node),
+                source_attributes=jsonld_attributes(node),
             )
         except ValidationError as exc:
             fields = sorted({".".join(str(p) for p in e["loc"]) for e in exc.errors()})
             raise AdapterError(f"incomplete product metadata: {', '.join(fields)}") from exc
 
     def _offers(self, node: dict[str, Any], url: str, ctx: AdapterContext) -> list[ExtractedOffer]:
+        out = self._node_offers(node, url, ctx, variant_sku="")
+        for variant in (node.get("hasVariant") or [])[:500]:
+            if isinstance(variant, dict):
+                out.extend(self._node_offers(variant, url, ctx, variant_sku=_text(variant.get("sku"))[:80]))
+        return out[:500]
+
+    def _node_offers(
+        self, node: dict[str, Any], url: str, ctx: AdapterContext, *, variant_sku: str
+    ) -> list[ExtractedOffer]:
         raw = node.get("offers")
         items = raw if isinstance(raw, list) else [raw] if raw else []
         out: list[ExtractedOffer] = []
@@ -275,11 +288,66 @@ class JsonLdProductAdapter:
                         currency=str(offer.get("priceCurrency", "")).upper(),
                         price=price,
                         availability=availability,  # type: ignore[arg-type]
+                        variant_sku=variant_sku,
                     )
                 )
             except (InvalidOperation, ValidationError, TypeError):
                 ctx.warnings.append("skipped an invalid offer")
         return out
+
+
+def _source_category(node: dict[str, Any]) -> str:
+    """Manufacturer category as declared in JSON-LD (text, list or breadcrumb-like value)."""
+    value = node.get("category")
+    if isinstance(value, list):
+        return " > ".join(t for t in (_text(v) for v in value) if t)[:300]
+    return _text(value)[:300]
+
+
+def jsonld_images(node: dict[str, Any], limit: int = 50) -> list[ExtractedImage]:
+    raw = node.get("image")
+    items = raw if isinstance(raw, list) else [raw] if raw else []
+    out: list[ExtractedImage] = []
+    seen: set[str] = set()
+    for position, item in enumerate(items[:limit], start=1):
+        url = item.get("url") or item.get("contentUrl") if isinstance(item, dict) else item
+        url = str(url or "").strip()
+        if url.startswith("//"):
+            url = "https:" + url
+        if not url.startswith(("http://", "https://")) or url in seen or len(url) > 1000:
+            continue
+        seen.add(url)
+        alt = _text(item.get("caption") or item.get("name")) if isinstance(item, dict) else ""
+        out.append(ExtractedImage(url=url, alt=alt[:200], position=position))
+    return out
+
+
+def jsonld_attributes(node: dict[str, Any], limit: int = 150) -> list[SourceAttribute]:
+    """Every schema.org additionalProperty (plus weight/material/color) as declared by the source."""
+    out: list[SourceAttribute] = []
+    candidates: list[tuple[str, Any, str, str]] = []
+    weight, weight_unit = _quantity(node.get("weight"))
+    if weight not in (None, ""):
+        candidates.append(("weight", weight, str(weight_unit or ""), "jsonld:$.weight"))
+    for key in ("material", "color", "pattern", "audience", "model"):
+        if node.get(key):
+            candidates.append((key, node.get(key), "", f"jsonld:$.{key}"))
+    for prop in node.get("additionalProperty") or []:
+        if isinstance(prop, dict):
+            name = _text(prop.get("name"))
+            unit = str(prop.get("unitText") or prop.get("unitCode") or "")
+            candidates.append((name, prop.get("value"), unit, f"jsonld:$.additionalProperty[?(@.name=={name!r})]"))
+    for name, value, unit, locator in candidates:
+        text_value = _text(value) if not isinstance(value, (bool, int, float)) else str(value)
+        if not name or not text_value:
+            continue
+        try:
+            out.append(SourceAttribute(name=name[:120], value=text_value[:500], unit=unit[:20], locator=locator[:300]))
+        except ValidationError:
+            continue
+        if len(out) >= limit:
+            break
+    return out
 
 
 register(JsonLdProductAdapter())

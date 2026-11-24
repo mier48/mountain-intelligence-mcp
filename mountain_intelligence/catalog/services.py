@@ -25,6 +25,7 @@ def sync_categories(using: str = "default") -> None:
                 "name_es": definition.name_es,
                 "family": definition.family,
                 "schema_version": definition.schema_version,
+                "technical": definition.technical,
             },
         )
 
@@ -69,7 +70,14 @@ def build_search_document(product: Product) -> str:
         product.mpn,
         *product.aliases,
         *definition.search_terms(),
+        # Manufacturer metadata makes every product findable, including `uncategorized` ones.
+        product.source_category,
+        product.product_type,
+        *product.tags[:60],
     ]
+    for attr in (product.source_attributes or [])[:60]:
+        if isinstance(attr, dict):
+            parts.extend(str(attr.get(k) or "")[:120] for k in ("name", "value"))
     specs = product.specifications or {}
     for spec in definition.fields:
         value = specs.get(spec.name)
@@ -110,7 +118,10 @@ def freshness(product: Product) -> str:
 
 
 def coverage(product: Product, definition: CategoryDefinition | None = None) -> float:
+    """Share of the category's key technical fields with a known value (0 without technical schema)."""
     definition = definition or get_category(product.category.slug)
+    if not definition.technical:
+        return 0.0
     keys = definition.key_fields
     if not keys:
         return 1.0
