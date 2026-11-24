@@ -1,0 +1,36 @@
+# Production overlay for a VPS where an existing Traefik (here the n8n stack) owns ports 80/443.
+# Use it INSTEAD of compose.prod.yaml (README, "6b"):
+#
+#   COMPOSE_FILE=compose.yaml:compose.traefik.yaml   (in .env)
+#
+# This stack publishes NO host port. Traefik reaches the MCP container over its own Docker network
+# and obtains the certificate with its existing resolver. Requires Docker Compose v2.24+ (`!reset`).
+
+services:
+  mountain-intelligence-mcp:
+    command: ["mountain-intelligence-mcp", "http", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    ports: !reset []
+    environment:
+      # Only Traefik forwards client traffic to port 8000, so X-Forwarded-For is trusted and the
+      # per-IP rate limit sees the real client address.
+      FORWARDED_ALLOW_IPS: "*"
+      MCP_ALLOWED_HOSTS: "${MCP_PUBLIC_DOMAIN:?set MCP_PUBLIC_DOMAIN in .env},localhost,localhost:*,127.0.0.1,127.0.0.1:*"
+    networks: [internal, public, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-n8n-stack_default}
+      # Only the MCP endpoint and the health probe are routed (keep in sync with MCP_HTTP_PATH).
+      traefik.http.routers.mountain-mcp.rule: Host(`${MCP_PUBLIC_DOMAIN}`) && (Path(`/mcp`) || PathPrefix(`/mcp/`) || Path(`/healthz`))
+      traefik.http.routers.mountain-mcp.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.mountain-mcp.tls: "true"
+      traefik.http.routers.mountain-mcp.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-mytlschallenge}
+      traefik.http.routers.mountain-mcp.middlewares: mountain-mcp-headers
+      traefik.http.middlewares.mountain-mcp-headers.headers.stsSeconds: "31536000"
+      traefik.http.middlewares.mountain-mcp-headers.headers.contentTypeNosniff: "true"
+      traefik.http.middlewares.mountain-mcp-headers.headers.referrerPolicy: no-referrer
+      traefik.http.services.mountain-mcp.loadbalancer.server.port: "8000"
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-n8n-stack_default}
