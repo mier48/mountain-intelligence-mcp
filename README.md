@@ -20,6 +20,7 @@ datos estructurados, reproducibles y con procedencia. No necesita ninguna clave 
 
 - [Arquitectura](#arquitectura) · [Inicio rápido (Docker Compose)](#inicio-rápido-docker-compose) ·
   [Despliegue en VPS (mountain-mcp.ltrapi.com)](#despliegue-en-vps-mountain-mcpltrapicom) ·
+  [Cargar productos de una marca](#cargar-productos-de-una-marca) ·
   [Desarrollo local](#desarrollo-local) · [Variables de entorno](#variables-de-entorno) ·
   [Conectar un cliente MCP](#conectar-un-cliente-mcp) · [Herramientas MCP](#herramientas-mcp) ·
   [Operación (CLI)](#operación-cli) · [Pruebas](#pruebas) · [Limitaciones](#limitaciones)
@@ -394,6 +395,101 @@ y `docker compose up -d`.
 Para editar el Caddyfile: valida con
 `docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile` y aplica con
 `docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile`.
+
+## Cargar productos de una marca
+
+Los productos no se buscan en Internet en el momento de la consulta: se cargan antes en PostgreSQL desde las
+fuentes de [`data/sources.yaml`](data/sources.yaml). Para una web de marca, el adaptador `jsonld_product`
+lee su sitemap (si es un índice, recorre todos los sitemaps hijos), se queda con las URLs que casan con
+`url_include`, descarga cada ficha respetando `robots.txt` y una pausa entre peticiones, y extrae los datos
+`schema.org/Product` (JSON-LD). Solo sincroniza fuentes con `access_status: authorized` o `terms_permit`.
+
+Ejemplo ya configurado: `arcteryx-website` (solo fichas `https://arcteryx.com/es/es/shop/…`, precios en €).
+`altus-website` está preparada pero deshabilitada hasta decidir su `access_status`.
+
+### 1. Configurar la fuente
+
+En `data/sources.yaml` (en tu repositorio, luego `git push`):
+
+```yaml
+  - slug: arcteryx-website
+    adapter: jsonld_product
+    allowed_domains: [arcteryx.com]          # el sitemap y las fichas deben estar aquí
+    access_status: terms_permit              # o authorized; sin esto no se sincroniza
+    enabled: true
+    auto_publish: true                       # publica sin revisión manual (ver paso 5)
+    sync_frequency_hours: 168                # resincronización semanal
+    config:
+      discovery: sitemap
+      sitemap_url: https://arcteryx.com/sitemap.xml
+      url_include: ['^https://arcteryx\.com/es/es/shop/…']   # regex entre comillas simples
+      category_rules:                        # categoría según la URL; la primera que casa gana
+        - {pattern: "backpack", category: backpack}
+      max_urls: 600                          # tope de fichas por ejecución (máx. 5000)
+```
+
+Si tienes un fichero de sitemap en vez de su URL: `discovery: urls` y `urls: [https://…, https://…]`.
+Si la marca publica especificaciones como `additionalProperty` en su JSON-LD, mapéalas con
+`property_map: {"Peso": {field: weight_g, unit: g}}`.
+
+### 2. Aplicar el registro en el VPS
+
+```bash
+cd /opt/mountain-intelligence-mcp
+git pull
+docker compose exec mountain-intelligence-mcp python manage.py import_sources --check   # valida el YAML
+docker compose exec mountain-intelligence-mcp python manage.py import_sources           # aplica
+docker compose exec mountain-intelligence-mcp python manage.py list_sources
+```
+
+`import_sources` aplica el YAML como fuente de verdad: los cambios de estado se hacen en el YAML (o se
+perderán en la siguiente importación). Si la imagen copia `data/` en lugar de montarla, ejecuta antes
+`docker compose up -d --build --wait`.
+
+### 3. Probar sin guardar nada
+
+```bash
+docker compose exec mountain-intelligence-mcp python manage.py sync_source arcteryx-website --dry-run --max-items 5
+```
+
+Ejecuta todo el pipeline con 5 fichas y deshace los cambios. Revisa las métricas (`discovered`, `new`,
+`invalid`, `errors`) y los errores por URL. Si `discovered` es mayor que 0 pero no se extrae ningún producto,
+esa web no publica JSON-LD de producto utilizable. Ajusta `url_include`, `category_rules` o `property_map` y
+repite. Para probar una fuente aún con `enabled: false` (pero ya autorizada) añade `--test-disabled`.
+
+### 4. Carga real
+
+```bash
+# Empieza con pocos:
+docker compose exec mountain-intelligence-mcp python manage.py sync_source arcteryx-website --max-items 50
+# Todos (hasta max_urls), en segundo plano a través del worker:
+docker compose exec mountain-intelligence-mcp python manage.py sync_source arcteryx-website --async
+docker compose logs -f worker      # para seguirlo
+docker compose exec mountain-intelligence-mcp python manage.py list_ingestion_runs --source arcteryx-website
+docker compose exec mountain-intelligence-mcp python manage.py list_ingestion_runs --errors
+```
+
+Hay una pausa entre peticiones (`INGESTION_MIN_DELAY_SECONDS`, 2 s por defecto), así que 600 fichas tardan
+unos 20 minutos. Repetir la carga es seguro: no duplica productos y solo registra lo que ha cambiado.
+
+### 5. Publicación y revisión
+
+Con `auto_publish: true` (Arc'teryx y Altus) los productos nuevos se publican al cargarse y aparecen ya en
+ChatGPT. Aun así, pasan por la cola de revisión los posibles duplicados, los conflictos entre fuentes, los
+cambios en campos críticos y los valores inválidos. Sin `auto_publish`, también los productos nuevos:
+
+```bash
+docker compose exec mountain-intelligence-mcp python manage.py list_review_items
+docker compose exec mountain-intelligence-mcp python manage.py list_review_items --kind new_product
+docker compose exec mountain-intelligence-mcp python manage.py review_item <id> --approve --actor alberto --reason "Ficha oficial Arc'teryx"
+docker compose exec mountain-intelligence-mcp python manage.py review_item <id> --reject --actor alberto --reason "No es producto técnico"
+docker compose exec mountain-intelligence-mcp python manage.py validate_catalog
+```
+
+### 6. Resincronización automática
+
+Con `enabled: true` en la fuente y `INGESTION_SCHEDULE_ENABLED=true` en `.env` (después `docker compose up -d`),
+el scheduler vuelve a sincronizar cada fuente cada `sync_frequency_hours`.
 
 ## Desarrollo local
 

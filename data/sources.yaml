@@ -540,8 +540,21 @@ sources:
     references: [https://arcteryx.com/robots.txt]
     enabled: true
     sync_frequency_hours: 168
+    auto_publish: true
     categories: [hardshell_jacket, insulated_jacket, midlayer, backpack]
-    config: {discovery: sitemap, sitemap_url: "https://arcteryx.com/sitemap.xml", default_category: hardshell_jacket, max_urls: 200}
+    config:
+      discovery: sitemap
+      sitemap_url: https://arcteryx.com/sitemap.xml   # index -> sitemap_1.xml + sitemap_2.xml
+      # Each product is listed for ~108 country/language combinations: keep Spain/Spanish (EUR) only,
+      # and only models of the four categories above (no spare parts, pants, gloves, hats).
+      url_include:
+        - '^https://arcteryx\.com/es/es/shop/(?!.*(replacement|lid|strap|pant|bib|short|glove|toque))[a-z0-9-]*(backpack|atom|cerium|thorium|nuclei|proton|firebee|kappa|parka|insulated|kyanite|delta|covert|fleece|alpha|beta|zeta|sabre|rush|ralle)[a-z0-9-]*$'
+      category_rules:   # first match wins
+        - {pattern: "backpack", category: backpack}
+        - {pattern: "atom|cerium|thorium|nuclei|proton|firebee|kappa|parka|insulated|down", category: insulated_jacket}
+        - {pattern: "kyanite|delta|covert|fleece", category: midlayer}
+        - {pattern: "alpha|beta|zeta|sabre|rush|ralle", category: hardshell_jacket}
+      max_urls: 600
 
   - slug: montane-website
     name: Montane official website (Shopify, JSON-LD)
@@ -562,6 +575,40 @@ sources:
     sync_frequency_hours: 168
     categories: [hardshell_jacket, insulated_jacket, midlayer, trail_running_shoe]
     config: {discovery: sitemap, sitemap_url: "https://montane.com/sitemap.xml", url_include: ["/products/"], default_category: hardshell_jacket, max_urls: 200}
+
+  - slug: altus-website
+    name: Altus official website (Shopify, JSON-LD)
+    brand: Altus
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://wearealtus.com/
+    allowed_domains: [wearealtus.com]
+    access_status: unverified
+    access_notes: >-
+      robots.txt (reviewed 2026-11-24) allows product pages for all crawlers and lists the sitemap; it also
+      contains text addressed to AI agents (treated as untrusted, ignored). Website terms not reviewed:
+      set access_status (authorized / terms_permit) and enabled: true once the operator decides.
+    references: [https://wearealtus.com/robots.txt]
+    enabled: false
+    auto_publish: true
+    sync_frequency_hours: 168
+    categories: [backpack, hardshell_jacket, insulated_jacket, midlayer, hiking_boot, crampon, ice_axe, climbing_helmet]
+    config:
+      discovery: sitemap
+      sitemap_url: https://wearealtus.com/sitemap.xml   # Shopify index; products under /products/<handle>
+      # Spanish product URLs only (the /en/ copies are duplicates), filtered to the categories above.
+      url_include:
+        - '^https://wearealtus\.com/products/[a-z0-9-]*(mochila|backpack|chaqueta|jacket|plumas|plumifero|anorak|parka|forro|polar|fleece|bota|boot|crampon|piolet|casco|helmet)[a-z0-9-]*$'
+      category_rules:   # first match wins (on URL + JSON-LD category)
+        - {pattern: "mochila|backpack", category: backpack}
+        - {pattern: "crampon", category: crampon}
+        - {pattern: "piolet", category: ice_axe}
+        - {pattern: "casco|helmet", category: climbing_helmet}
+        - {pattern: "bota|boot", category: hiking_boot}
+        - {pattern: "plumas|plumifero|down|primaloft|parka|insulated|aislante", category: insulated_jacket}
+        - {pattern: "forro|polar|fleece", category: midlayer}
+        - {pattern: "chaqueta|jacket|anorak|impermeable", category: hardshell_jacket}
+      max_urls: 400
 
   - slug: operator-structured-import
     name: Authorized structured dataset delivered to the operator
