@@ -298,12 +298,16 @@ sources:
     adapter: jsonld_product
     base_url: https://grivel.com/
     allowed_domains: [grivel.com, www.grivel.com]
-    access_status: unverified
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
     access_notes: >-
       robots.txt explicitly allows several AI crawlers, but no licence for catalog reuse was found.
       Request permission or a data feed (crampon binding and size data are key for compatibility).
+      Operator decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit
+      extracting public product specifications from the official site for this service; revisit if the
+      brand objects or its terms change.
     references: [https://www.grivel.com/robots.txt]
-    enabled: false
+    enabled: true
     sync_frequency_hours: 168
     categories: [crampon, ice_axe, climbing_helmet]
     config:
@@ -323,12 +327,16 @@ sources:
     adapter: jsonld_product
     base_url: https://scarpa.com/
     allowed_domains: [www.scarpa.com, scarpa.com]
-    access_status: unverified
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
     access_notes: >-
-      Shopify storefront; robots.txt allows product pages and lists a sitemap, and contains text
-      addressed to AI agents (treated as untrusted). Website-use terms and database rights not reviewed.
+      Shopify storefront; robots.txt allows product pages and lists a sitemap, and contains text addressed
+      to AI agents (treated as untrusted). Website-use terms and database rights not reviewed. Operator
+      decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit extracting public
+      product specifications from the official site for this service; revisit if the brand objects or its
+      terms change.
     references: [https://www.scarpa.com/robots.txt, https://scarpa.com/pages/terms-and-conditions]
-    enabled: false
+    enabled: true
     sync_frequency_hours: 168
     categories: [mountaineering_boot, hiking_boot, trail_running_shoe]
     config:
@@ -348,12 +356,16 @@ sources:
     adapter: jsonld_product
     base_url: https://www.lasportiva.com/
     allowed_domains: [www.lasportiva.com]
-    access_status: unverified
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
     access_notes: >-
-      robots.txt allows product paths and lists per-locale sitemaps. The US entity grants only a
-      personal, limited privilege to use its websites; terms for the EU site not found.
+      robots.txt allows product paths and lists per-locale sitemaps. The US entity grants only a personal,
+      limited privilege to use its websites; terms for the EU site not found. Operator decision 2026-11-24
+      (Alberto Mier, LTR Digital Solutions): terms judged to permit extracting public product
+      specifications from the official site for this service; revisit if the brand objects or its terms
+      change.
     references: [https://www.lasportiva.com/robots.txt, https://www.lasportivausa.com/terms-and-conditions]
-    enabled: false
+    enabled: true
     sync_frequency_hours: 168
     categories: [mountaineering_boot, hiking_boot, trail_running_shoe]
     config:
@@ -372,10 +384,16 @@ sources:
     adapter: jsonld_product
     base_url: https://www.salewa.com/
     allowed_domains: [www.salewa.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (product pages not blocked; es-es sitemap available).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (product pages not blocked; es-es sitemap available). Operator
+      decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit extracting public
+      product specifications from the official site for this service; revisit if the brand objects or its
+      terms change.
     references: [https://www.salewa.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [mountaineering_boot, hiking_boot, crampon, ice_axe]
     config: {discovery: sitemap, sitemap_url: "https://www.salewa.com/es-es-sitemap.xml", default_category: hiking_boot, max_urls: 200}
 
@@ -386,10 +404,16 @@ sources:
     adapter: jsonld_product
     base_url: https://lowa.com/
     allowed_domains: [lowa.com, www.lowa.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (raw /catalog/product/view/ URLs disallowed; use sitemap URLs only).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (raw /catalog/product/view/ URLs disallowed; use sitemap URLs only).
+      Operator decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit
+      extracting public product specifications from the official site for this service; revisit if the
+      brand objects or its terms change.
     references: [https://www.lowa.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [mountaineering_boot, hiking_boot]
     config: {discovery: sitemap, sitemap_url: "https://lowa.com/media/sitemap/sitemap_en.xml", default_category: hiking_boot, max_urls: 200}
 
@@ -400,10 +424,15 @@ sources:
     adapter: jsonld_product
     base_url: https://www.blackdiamondequipment.com/
     allowed_domains: [blackdiamondequipment.com, www.blackdiamondequipment.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (product pages allowed).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (product pages allowed). Operator decision 2026-11-24 (Alberto Mier,
+      LTR Digital Solutions): terms judged to permit extracting public product specifications from the
+      official site for this service; revisit if the brand objects or its terms change.
     references: [https://www.blackdiamondequipment.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [crampon, ice_axe, climbing_helmet]
     config:
       discovery: sitemap
@@ -422,10 +451,16 @@ sources:
     adapter: jsonld_product
     base_url: https://www.ortovox.com/
     allowed_domains: [www.ortovox.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (Allow /; query strings blocked; int-en sitemap).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (Allow /; query strings blocked; int-en sitemap). Operator decision
+      2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit extracting public product
+      specifications from the official site for this service; revisit if the brand objects or its terms
+      change.
     references: [https://www.ortovox.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [backpack, insulated_jacket, midlayer, hardshell_jacket]
     config: {discovery: sitemap, sitemap_url: "https://www.ortovox.com/int-en/sitemap.xml", default_category: backpack, max_urls: 200}
 
@@ -436,10 +471,15 @@ sources:
     adapter: jsonld_product
     base_url: https://www.deuter.com/
     allowed_domains: [www.deuter.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (Allow /; es-es sitemap).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (Allow /; es-es sitemap). Operator decision 2026-11-24 (Alberto
+      Mier, LTR Digital Solutions): terms judged to permit extracting public product specifications from
+      the official site for this service; revisit if the brand objects or its terms change.
     references: [https://www.deuter.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [backpack]
     config: {discovery: sitemap, sitemap_url: "https://www.deuter.com/es-es/sitemap.xml", default_category: backpack, max_urls: 200}
 
@@ -450,10 +490,16 @@ sources:
     adapter: jsonld_product
     base_url: https://www.osprey.com/
     allowed_domains: [www.osprey.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (*/catalog/* blocked; confirm product URL structure first).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (*/catalog/* blocked; confirm product URL structure first). Operator
+      decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit extracting public
+      product specifications from the official site for this service; revisit if the brand objects or its
+      terms change.
     references: [https://www.osprey.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [backpack]
     config: {discovery: sitemap, sitemap_url: "https://www.osprey.com/es/media/sitemap/sitemap_es.xml", default_category: backpack, max_urls: 200}
 
@@ -464,10 +510,16 @@ sources:
     adapter: jsonld_product
     base_url: https://www.mammut.com/
     allowed_domains: [www.mammut.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (technical-attribute filter paths blocked; product pages allowed).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (technical-attribute filter paths blocked; product pages allowed).
+      Operator decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit
+      extracting public product specifications from the official site for this service; revisit if the
+      brand objects or its terms change.
     references: [https://www.mammut.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [hardshell_jacket, insulated_jacket, midlayer, backpack, climbing_helmet]
     config: {discovery: sitemap, sitemap_url: "https://www.mammut.com/sitemap.xml", default_category: hardshell_jacket, max_urls: 200}
 
@@ -478,10 +530,16 @@ sources:
     adapter: jsonld_product
     base_url: https://arcteryx.com/
     allowed_domains: [arcteryx.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (product pages allowed for generic and named AI crawlers).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (product pages allowed for generic and named AI crawlers). Operator
+      decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit extracting public
+      product specifications from the official site for this service; revisit if the brand objects or its
+      terms change.
     references: [https://arcteryx.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [hardshell_jacket, insulated_jacket, midlayer, backpack]
     config: {discovery: sitemap, sitemap_url: "https://arcteryx.com/sitemap.xml", default_category: hardshell_jacket, max_urls: 200}
 
@@ -492,10 +550,16 @@ sources:
     adapter: jsonld_product
     base_url: https://montane.com/
     allowed_domains: [montane.com, www.montane.com]
-    access_status: unverified
-    access_notes: Not evaluated beyond robots.txt (Shopify; contains AI-agent-directed comments, ignored).
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Not evaluated beyond robots.txt (Shopify; contains AI-agent-directed comments, ignored). Operator
+      decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): terms judged to permit extracting public
+      product specifications from the official site for this service; revisit if the brand objects or its
+      terms change.
     references: [https://www.montane.com/robots.txt]
-    enabled: false
+    enabled: true
+    sync_frequency_hours: 168
     categories: [hardshell_jacket, insulated_jacket, midlayer, trail_running_shoe]
     config: {discovery: sitemap, sitemap_url: "https://montane.com/sitemap.xml", url_include: ["/products/"], default_category: hardshell_jacket, max_urls: 200}
 
