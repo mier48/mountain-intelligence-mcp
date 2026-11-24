@@ -14,16 +14,22 @@ Para ejecutar comandos: `docker compose exec mountain-intelligence-mcp python ma
 
 ## Producción: TLS y proxy inverso
 
-Publica solo el proxy. Ejemplo con Caddy (certificados automáticos):
+El despliegue de producción está empaquetado: `compose.prod.yaml` añade Caddy (certificados automáticos,
+único servicio publicado en 80/443), retira la publicación del puerto 8000, arranca el MCP con
+`--proxy-headers` y deriva `MCP_ALLOWED_HOSTS` de `MCP_PUBLIC_DOMAIN`. La configuración del proxy está en
+`deploy/Caddyfile` (solo `/mcp` y `/healthz`; el resto responde 404). Guía paso a paso para
+`mountain-mcp.ltrapi.com` (DNS, cortafuegos, `.env`, verificación, actualizaciones y problemas frecuentes):
+README, sección «Despliegue en VPS».
 
-```
-mcp.tu-dominio.example {
-    reverse_proxy 127.0.0.1:8000
-}
+```bash
+# en .env del servidor
+COMPOSE_FILE=compose.yaml:compose.prod.yaml
+MCP_PUBLIC_DOMAIN=mountain-mcp.ltrapi.com
 ```
 
-y en `.env`: `MCP_ALLOWED_HOSTS=mcp.tu-dominio.example`, `FORWARDED_ALLOW_IPS=<ip del proxy>`; añade
-`--proxy-headers` al comando del servicio MCP para que el rate limit vea la IP real del cliente.
+Con otro proxy (nginx, Traefik…): no uses el overlay; publica el MCP solo en `127.0.0.1`, añade el dominio a
+`MCP_ALLOWED_HOSTS`, arranca con `--proxy-headers`, fija `FORWARDED_ALLOW_IPS` a la IP del proxy y desactiva
+el buffering de respuestas en el proxy.
 
 ## Registrar y habilitar una marca nueva
 
@@ -74,6 +80,9 @@ Editar `data/activity_profiles.yaml` / `data/compatibility_rules.yaml` **creando
 Tras la revisión por un profesional: `review_status: reviewed`, `reviewed_by`, `reviewed_at`.
 
 ## Copia de seguridad y restauración (PostgreSQL)
+
+En producción, `deploy/backup.sh` automatiza la copia (verificación con `pg_restore --list`, retención
+`KEEP_DAYS`, pensado para cron). Equivalente manual:
 
 ```bash
 # Copia (formato custom, comprimida)

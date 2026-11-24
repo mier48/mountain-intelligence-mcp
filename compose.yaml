@@ -2,7 +2,7 @@
 #   cp .env.example .env   # then set real secrets
 #   docker compose up -d --build
 # Only the MCP endpoint is published (bound to localhost); PostgreSQL and Redis stay internal.
-# In production put a TLS reverse proxy in front of port 8000 (see docs/deployment.md).
+# In production put a TLS reverse proxy in front of port 8000 (compose.prod.yaml + deploy/Caddyfile, see README).
 
 x-app: &app
   build: .

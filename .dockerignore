@@ -10,3 +10,4 @@ docs
 backups
 *.md
 !README.md
+deploy

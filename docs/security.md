@@ -26,8 +26,11 @@
 - Tamaño máximo de petición (`MCP_MAX_REQUEST_BODY_BYTES`, 256 KiB), límite por IP (`MCP_RATE_LIMIT_PER_MINUTE`,
   en memoria por proceso), `statement_timeout` en PostgreSQL, límites de tamaño en todas las entradas
   (listas, textos, filtros ≤ 12, `limit` ≤ 25, offset ≤ 500, comparar ≤ 5).
-- TLS: obligatorio en producción mediante proxy inverso (ver `operations.md`). Con proxy, arrancar con
-  `--proxy-headers` y `FORWARDED_ALLOW_IPS` restringido a la IP del proxy.
+- TLS: obligatorio en producción mediante proxy inverso. `compose.prod.yaml` + `deploy/Caddyfile` lo
+  resuelven con Caddy: HTTPS automático con HSTS, solo `/mcp` y `/healthz` expuestos, cuerpo ≤ 1 MB, y la
+  cabecera `Authorization` redactada en sus logs (comportamiento por defecto de Caddy). El puerto 8000 no se
+  publica, de modo que `FORWARDED_ALLOW_IPS="*"` solo confía en contenedores de la propia red Compose; con un
+  proxy propio, restringirlo a la IP del proxy.
 
 ## Ingesta segura (SSRF)
 

@@ -19,6 +19,7 @@ datos estructurados, reproducibles y con procedencia. No necesita ninguna clave 
 ## Contenido
 
 - [Arquitectura](#arquitectura) · [Inicio rápido (Docker Compose)](#inicio-rápido-docker-compose) ·
+  [Despliegue en VPS (mountain-mcp.ltrapi.com)](#despliegue-en-vps-mountain-mcpltrapicom) ·
   [Desarrollo local](#desarrollo-local) · [Variables de entorno](#variables-de-entorno) ·
   [Conectar un cliente MCP](#conectar-un-cliente-mcp) · [Herramientas MCP](#herramientas-mcp) ·
   [Operación (CLI)](#operación-cli) · [Pruebas](#pruebas) · [Limitaciones](#limitaciones)
@@ -81,11 +82,233 @@ En Windows PowerShell, `curl` es un alias de `Invoke-WebRequest`: usa `curl.exe`
 Servicios: `postgres`, `redis`, `migrate` (one-shot: migraciones + perfiles + reglas),
 `mountain-intelligence-mcp` (HTTP en `127.0.0.1:8000/mcp`), `worker` y `scheduler` (Celery beat). Todos con
 healthcheck. PostgreSQL y Redis no se publican y viven en una red interna sin salida. Al arrancar no se ejecuta
-ninguna ingesta externa. En producción coloca un proxy inverso TLS delante del puerto 8000
-([docs/operations.md](docs/operations.md)).
+ninguna ingesta externa. Para producción con dominio y HTTPS sigue
+[Despliegue en VPS](#despliegue-en-vps-mountain-mcpltrapicom).
 
 Los precios del catálogo demo se fechan en el momento de la carga y caducan a los `MI_OFFER_MAX_AGE_DAYS`
 (7 por defecto); vuelve a ejecutar `seed_demo_data` (idempotente) para refrescarlos.
+
+## Despliegue en VPS (mountain-mcp.ltrapi.com)
+
+Resultado: `https://mountain-mcp.ltrapi.com/mcp` con HTTPS automático (Let's Encrypt), autenticación por token
+y solo los puertos 80/443 abiertos. Lo añaden dos ficheros sobre el `compose.yaml` base:
+
+| Fichero | Qué hace |
+|---|---|
+| [`compose.prod.yaml`](compose.prod.yaml) | Añade **Caddy** (TLS, único servicio publicado), deja de publicar el puerto 8000, arranca el MCP con `--proxy-headers` y deriva `MCP_ALLOWED_HOSTS` del dominio |
+| [`deploy/Caddyfile`](deploy/Caddyfile) | Proxy solo para `/mcp` y `/healthz` (el resto 404), HSTS, límite de cuerpo 1 MB, logs JSON |
+| [`deploy/backup.sh`](deploy/backup.sh) | Copia diaria de PostgreSQL verificada con `pg_restore --list` y retención |
+
+```
+Internet ──443/80──► caddy ──red docker──► mountain-intelligence-mcp:8000 ──► postgres / redis (red interna)
+                                            worker / scheduler (salida a Internet solo para fuentes autorizadas)
+```
+
+### 1. Requisitos
+
+- VPS Linux de 64 bits (p. ej. Ubuntu 24.04 LTS o Debian 12), **2 GB de RAM** y 10 GB de disco
+  como mínimo (la imagen se compila en el propio servidor).
+- Acceso SSH con un usuario con `sudo`.
+- Control del DNS de `ltrapi.com`.
+
+### 2. DNS
+
+Crea en la zona `ltrapi.com`:
+
+| Tipo | Nombre | Valor |
+|---|---|---|
+| `A` | `mountain-mcp` | IPv4 pública del VPS |
+| `AAAA` | `mountain-mcp` | IPv6 del VPS (solo si el VPS tiene IPv6; si no, no crees este registro) |
+
+Comprueba antes de seguir (desde tu PC): `nslookup mountain-mcp.ltrapi.com` debe devolver la IP del VPS.
+Si el DNS está en Cloudflare, deja el registro en **«DNS only»** (nube gris): el certificado lo emite Caddy
+y el proxy de Cloudflare interferiría con el reto ACME y con las respuestas en streaming.
+
+### 3. Preparar el servidor (una vez)
+
+```bash
+# Docker Engine + plugin Compose (script oficial; Compose v2.24+ es obligatorio)
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER" && newgrp docker
+docker compose version
+
+# Cortafuegos: SSH, HTTP (reto ACME y redirección) y HTTPS (TCP + UDP para HTTP/3)
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw allow 443/udp
+sudo ufw enable
+
+# Actualizaciones de seguridad automáticas (Ubuntu/Debian)
+sudo apt-get install -y unattended-upgrades
+```
+
+> Docker publica puertos saltándose `ufw`. Por eso el despliegue **solo** publica 80/443 (Caddy):
+> PostgreSQL, Redis y el puerto 8000 del MCP no se exponen en el host.
+
+### 4. Subir el código
+
+**Opción A — repositorio Git** (privado, p. ej. en GitHub) tras hacer `git push` de la rama:
+
+```bash
+sudo mkdir -p /opt/mountain-intelligence-mcp && sudo chown "$USER": /opt/mountain-intelligence-mcp
+git clone <url-del-repositorio> /opt/mountain-intelligence-mcp
+cd /opt/mountain-intelligence-mcp
+```
+
+**Opción B — sin repositorio remoto**, desde tu PC (PowerShell, en la carpeta del proyecto). `git archive`
+empaqueta solo lo confirmado en Git, así que tu `.env` local nunca sale de tu equipo:
+
+```powershell
+git archive --format=tar.gz -o mountain-intelligence-mcp.tar.gz HEAD
+scp mountain-intelligence-mcp.tar.gz usuario@IP_DEL_VPS:/tmp/
+```
+
+y en el VPS:
+
+```bash
+sudo mkdir -p /opt/mountain-intelligence-mcp && sudo chown "$USER": /opt/mountain-intelligence-mcp
+tar -xzf /tmp/mountain-intelligence-mcp.tar.gz -C /opt/mountain-intelligence-mcp
+cd /opt/mountain-intelligence-mcp
+```
+
+### 5. Configurar `.env` de producción
+
+```bash
+cp .env.example .env
+chmod 600 .env
+openssl rand -hex 32   # → POSTGRES_PASSWORD
+openssl rand -hex 32   # → MCP_AUTH_TOKENS (uno por cliente, separados por comas)
+nano .env
+```
+
+Valores a fijar (el resto puede quedarse por defecto):
+
+```dotenv
+COMPOSE_FILE=compose.yaml:compose.prod.yaml
+MCP_PUBLIC_DOMAIN=mountain-mcp.ltrapi.com
+POSTGRES_PASSWORD=<primer valor generado>
+MCP_AUTH_TOKENS=<segundo valor generado>
+MCP_ALLOW_UNAUTHENTICATED=false
+MCP_ALLOWED_ORIGINS=
+INGESTION_USER_AGENT=MountainIntelligenceBot/0.1 (+https://mountain-mcp.ltrapi.com; contacto: <tu email>)
+MI_INCLUDE_SYNTHETIC_DATA=false
+```
+
+- `COMPOSE_FILE` hace que cualquier `docker compose …` ejecutado en esta carpeta use el overlay de producción
+  (no hace falta repetir `-f`).
+- `MCP_ALLOWED_HOSTS` y `FORWARDED_ALLOW_IPS` los fija `compose.prod.yaml`; no hace falta tocarlos.
+- **Catálogo:** mientras no haya fuentes reales autorizadas, el catálogo real está vacío y las herramientas
+  responden `not_found`/`insufficient_data`. Para una instancia de demostración pon
+  `MI_INCLUDE_SYNTHETIC_DATA=true` y carga `seed_demo_data` (paso 6): las respuestas incluirán productos
+  inventados marcados como sintéticos. No lo actives en una instancia que vaya a usar alguien como datos reales.
+- Cambiar `POSTGRES_PASSWORD` después del primer arranque **no** cambia la contraseña ya creada en el volumen
+  de PostgreSQL; fíjala bien antes de arrancar.
+
+### 6. Arrancar
+
+```bash
+docker compose up -d --build --wait     # compila, migra, carga perfiles/reglas y obtiene el certificado
+docker compose ps                       # todo healthy; `migrate` en "exited (0)"
+
+docker compose exec mountain-intelligence-mcp python manage.py import_sources
+# Solo si has activado MI_INCLUDE_SYNTHETIC_DATA=true:
+docker compose exec mountain-intelligence-mcp python manage.py seed_demo_data
+```
+
+El primer arranque tarda unos minutos (compilación de la imagen). Caddy pide el certificado en cuanto arranca;
+sigue el proceso con `docker compose logs -f caddy` (busca `certificate obtained successfully`).
+
+### 7. Verificar
+
+Desde cualquier máquina con `bash` (en el VPS sirve; usa el token de `MCP_AUTH_TOKENS`):
+
+```bash
+TOKEN='<tu token>'
+URL=https://mountain-mcp.ltrapi.com
+
+curl -s $URL/healthz                                    # {"status": "ok"}
+curl -s -o /dev/null -w '%{http_code}\n' $URL/mcp -X POST   # 401: sin token se rechaza
+curl -s -o /dev/null -w '%{http_code}\n' $URL/            # 404: nada más está expuesto
+
+curl -s $URL/mcp \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'    # lista las 8 herramientas
+```
+
+Desde Windows PowerShell:
+
+```powershell
+$Token = '<tu token>'
+Invoke-RestMethod https://mountain-mcp.ltrapi.com/healthz
+$body = '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+(Invoke-RestMethod https://mountain-mcp.ltrapi.com/mcp -Method Post -Body $body -ContentType 'application/json' `
+  -Headers @{ Authorization = "Bearer $Token"; Accept = 'application/json, text/event-stream' }).result.tools.name
+```
+
+### 8. Conectar los clientes
+
+```bash
+claude mcp add --transport http mountain-intelligence https://mountain-mcp.ltrapi.com/mcp \
+  --header "Authorization: Bearer $MCP_TOKEN"
+```
+
+o en `.mcp.json` (detalles en [Conectar un cliente MCP](#conectar-un-cliente-mcp)). Usa un token distinto por
+cliente o persona: para revocar uno, quítalo de `MCP_AUTH_TOKENS` y ejecuta `docker compose up -d`.
+
+### 9. Operación diaria
+
+```bash
+cd /opt/mountain-intelligence-mcp
+docker compose ps                                   # estado y healthchecks
+docker compose logs -f --since 10m mountain-intelligence-mcp caddy
+docker compose exec mountain-intelligence-mcp python manage.py list_sources
+docker compose exec mountain-intelligence-mcp python manage.py validate_catalog
+```
+
+**Actualizar a una versión nueva** (las migraciones, perfiles y reglas se aplican solos vía `migrate`):
+
+```bash
+deploy/backup.sh                                    # copia antes de actualizar
+git pull                                            # opción A; en la opción B, vuelve a extraer el tar.gz
+docker compose up -d --build --wait
+docker compose exec mountain-intelligence-mcp python manage.py import_sources   # si cambió data/sources.yaml
+docker image prune -f
+```
+
+**Copias de seguridad** — `deploy/backup.sh` vuelca PostgreSQL a `backups/` (formato custom de `pg_dump`),
+comprueba que el volcado es legible y borra los de más de 14 días (`KEEP_DAYS`). Prográmalo con `crontab -e`:
+
+```cron
+15 3 * * * /opt/mountain-intelligence-mcp/deploy/backup.sh >> /opt/mountain-intelligence-mcp/backups/backup.log 2>&1
+```
+
+Copia `backups/` fuera del VPS con regularidad (otro servidor, almacenamiento de objetos…): una copia en
+el mismo disco no protege de la pérdida del servidor. Restauración: [docs/operations.md](docs/operations.md).
+El volumen `caddy_data` guarda los certificados; no lo borres (Let's Encrypt limita las reemisiones).
+
+**Ingesta programada:** desactivada por defecto. Solo tiene efecto con fuentes habilitadas y autorizadas
+(procedimiento en [docs/operations.md](docs/operations.md)); entonces pon `INGESTION_SCHEDULE_ENABLED=true`
+y `docker compose up -d`.
+
+### 10. Problemas frecuentes
+
+| Síntoma | Causa y solución |
+|---|---|
+| `docker compose` dice `required variable … is missing a value` | Falta `MCP_AUTH_TOKENS`, `POSTGRES_PASSWORD` o `MCP_PUBLIC_DOMAIN` en `.env` |
+| `ports: !reset` o error de sintaxis al leer `compose.prod.yaml` | Compose anterior a v2.24: actualiza Docker (`docker compose version`) |
+| El navegador/curl da error de certificado o `caddy` registra errores ACME | El DNS aún no apunta al VPS, el puerto 80/443 está cerrado (ufw o cortafuegos del proveedor) o el registro está proxificado en Cloudflare. Corrige y `docker compose restart caddy` |
+| `401 Unauthorized` | Falta la cabecera `Authorization: Bearer …` o el token no está en `MCP_AUTH_TOKENS` |
+| `421 Misdirected Request` | El `Host` no coincide con `MCP_PUBLIC_DOMAIN` (¿usas otra URL o la IP directamente?) |
+| `403 Forbidden` desde una aplicación web | Su `Origin` no está en `MCP_ALLOWED_ORIGINS` (vacío = solo clientes no navegador) |
+| `429 Too Many Requests` | Límite por IP (`MCP_RATE_LIMIT_PER_MINUTE`); súbelo si varios clientes comparten IP |
+| `/healthz` devuelve `{"status": "unavailable"}` | El MCP no llega a PostgreSQL: `docker compose logs postgres migrate` |
+| `migrate` termina con error | `docker compose logs migrate`; tras corregir, `docker compose up -d --wait` lo reintenta |
+
+Para editar el Caddyfile: valida con
+`docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile` y aplica con
+`docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile`.
 
 ## Desarrollo local
 
@@ -154,14 +377,14 @@ claude mcp add --transport stdio \
 **Remoto (Streamable HTTP) con token bearer, Claude Code:**
 
 ```bash
-claude mcp add --transport http mountain-intelligence https://mcp.tu-dominio.example/mcp \
+claude mcp add --transport http mountain-intelligence https://mountain-mcp.ltrapi.com/mcp \
   --header "Authorization: Bearer $MCP_TOKEN"
 ```
 
 o en `.mcp.json`:
 
 ```json
-{"mcpServers": {"mountain-intelligence": {"type": "http", "url": "https://mcp.tu-dominio.example/mcp",
+{"mcpServers": {"mountain-intelligence": {"type": "http", "url": "https://mountain-mcp.ltrapi.com/mcp",
   "headers": {"Authorization": "Bearer ${MCP_TOKEN}"}}}}
 ```
 
