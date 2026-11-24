@@ -286,6 +286,8 @@ def test_response_size_limit():
     with pytest.raises(FetchError) as exc:
         fetcher.fetch("https://www.maker.test/big")
     assert exc.value.kind == "too_large"
+    # A per-call limit (used for sitemaps) can be larger than the fetcher's default.
+    assert len(fetcher.fetch("https://www.maker.test/big", max_bytes=4096).body) == 2048
 
 
 def test_retries_with_backoff_then_success():

@@ -583,13 +583,16 @@ sources:
     adapter: jsonld_product
     base_url: https://wearealtus.com/
     allowed_domains: [wearealtus.com]
-    access_status: unverified
+    access_status: terms_permit
+    terms_reviewed_at: 2026-11-24
     access_notes: >-
       robots.txt (reviewed 2026-11-24) allows product pages for all crawlers and lists the sitemap; it also
-      contains text addressed to AI agents (treated as untrusted, ignored). Website terms not reviewed:
-      set access_status (authorized / terms_permit) and enabled: true once the operator decides.
+      contains text addressed to AI agents (treated as untrusted, ignored). Website terms not reviewed in
+      detail. Operator decision 2026-11-24 (Alberto Mier, LTR Digital Solutions): extraction of public
+      product specifications from the official site permitted for this service; revisit if the brand
+      objects or its terms change.
     references: [https://wearealtus.com/robots.txt]
-    enabled: false
+    enabled: true
     auto_publish: true
     sync_frequency_hours: 168
     categories: [backpack, hardshell_jacket, insulated_jacket, midlayer, hiking_boot, crampon, ice_axe, climbing_helmet]

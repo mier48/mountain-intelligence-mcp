@@ -51,7 +51,8 @@ _AVAILABILITY = {
     "limitedavailability": "in_stock",
 }
 MAX_SITEMAP_DOCS = 20
-MAX_SITEMAP_BYTES = 20 * 1024 * 1024
+# Sitemap protocol limit (50 MB uncompressed per file); product pages keep INGESTION_MAX_RESPONSE_BYTES.
+MAX_SITEMAP_BYTES = 50 * 1024 * 1024
 
 
 def _types(node: dict[str, Any]) -> set[str]:
@@ -136,7 +137,7 @@ class JsonLdProductAdapter:
         while pending and fetched < MAX_SITEMAP_DOCS:
             url = pending.pop(0)
             fetched += 1
-            doc = ctx.fetcher.fetch(url, accept="application/xml,text/xml;q=0.9,*/*;q=0.5")
+            doc = ctx.fetcher.fetch(url, accept="application/xml,text/xml;q=0.9,*/*;q=0.5", max_bytes=MAX_SITEMAP_BYTES)
             body = doc.body
             if url.endswith(".gz") or body[:2] == b"\x1f\x8b":
                 # Bounded decompression: protects against gzip bombs.

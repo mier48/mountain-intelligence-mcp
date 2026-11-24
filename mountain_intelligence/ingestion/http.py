@@ -186,13 +186,15 @@ class SafeFetcher:
         last_modified: str = "",
         accept: str = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.5",
         item: DiscoveredItem | None = None,
+        max_bytes: int | None = None,
     ) -> FetchedDocument:
+        """Fetch ``url``. ``max_bytes`` overrides the fetcher's size limit for this call only (sitemaps)."""
         headers = {"Accept": accept}
         if etag:
             headers["If-None-Match"] = etag
         if last_modified:
             headers["If-Modified-Since"] = last_modified
-        response, body, final_url = self._request_following_redirects(url, headers)
+        response, body, final_url = self._request_following_redirects(url, headers, max_bytes or self.max_bytes)
         doc = FetchedDocument(
             item=item or DiscoveredItem(external_id=url, url=url),
             url=final_url,
@@ -207,12 +209,14 @@ class SafeFetcher:
         return doc
 
     # -- internals ---------------------------------------------------------------------------
-    def _request_following_redirects(self, url: str, headers: dict[str, str]) -> tuple[httpx2.Response, bytes, str]:
+    def _request_following_redirects(
+        self, url: str, headers: dict[str, str], max_bytes: int
+    ) -> tuple[httpx2.Response, bytes, str]:
         current = url
         for _ in range(self.max_redirects + 1):
             self.policy.check(current)
             self._check_robots(current)
-            response, body = self._request_with_retries(current, headers)
+            response, body = self._request_with_retries(current, headers, max_bytes)
             if response.status_code in (301, 302, 303, 307, 308):
                 location = response.headers.get("location")
                 if not location:
@@ -228,7 +232,7 @@ class SafeFetcher:
             return response, body, current
         raise FetchError("blocked", "too many redirects")
 
-    def _request_with_retries(self, url: str, headers: dict[str, str]) -> tuple[httpx2.Response, bytes]:
+    def _request_with_retries(self, url: str, headers: dict[str, str], max_bytes: int) -> tuple[httpx2.Response, bytes]:
         host = (urlsplit(url).hostname or "").lower()
         attempt = 0
         while True:
@@ -236,12 +240,12 @@ class SafeFetcher:
             try:
                 with self.client.stream("GET", url, headers=headers) as response:
                     declared = response.headers.get("content-length")
-                    if declared and declared.isdigit() and int(declared) > self.max_bytes:
+                    if declared and declared.isdigit() and int(declared) > max_bytes:
                         raise FetchError("too_large", "response exceeds size limit")
                     chunks, size = [], 0
                     for chunk in response.iter_bytes():
                         size += len(chunk)
-                        if size > self.max_bytes:
+                        if size > max_bytes:
                             raise FetchError("too_large", "response exceeds size limit")
                         chunks.append(chunk)
                     body = b"".join(chunks)
@@ -288,7 +292,7 @@ class SafeFetcher:
         parser = RobotFileParser(robots_url)
         try:
             self.policy.check(robots_url)
-            response, body = self._request_with_retries(robots_url, {"Accept": "text/plain"})
+            response, body = self._request_with_retries(robots_url, {"Accept": "text/plain"}, self.max_bytes)
         except FetchError:
             return None
         if response.status_code in (401, 403):
