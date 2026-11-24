@@ -1,0 +1,111 @@
+# Mountain Intelligence MCP — reproducible deployment.
+#   cp .env.example .env   # then set real secrets
+#   docker compose up -d --build
+# Only the MCP endpoint is published (bound to localhost); PostgreSQL and Redis stay internal.
+# In production put a TLS reverse proxy in front of port 8000 (see docs/deployment.md).
+
+x-app: &app
+  build: .
+  image: mountain-intelligence-mcp:0.1.0
+  env_file: .env
+  environment:
+    POSTGRES_HOST: postgres
+    REDIS_URL: redis://redis:6379/0
+    CELERY_BROKER_URL: redis://redis:6379/0
+  restart: unless-stopped
+  networks: [internal]
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mountain_intelligence}
+      POSTGRES_USER: ${POSTGRES_USER:-mountain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks: [internal]
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    networks: [internal]
+
+  # One-shot: schema migrations + versioned reference data (profiles, compatibility rules).
+  # Sources are registered explicitly by the operator (`import_sources`); no ingestion runs here.
+  migrate:
+    <<: *app
+    command: >-
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py load_activity_profiles &&
+             python manage.py load_compatibility_rules"
+    restart: "no"
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  mountain-intelligence-mcp:
+    <<: *app
+    command: ["mountain-intelligence-mcp", "http", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      # Fail fast (before any container starts) instead of a restart loop when no token is set.
+      MCP_AUTH_TOKENS: ${MCP_AUTH_TOKENS:?set MCP_AUTH_TOKENS in .env, e.g. the output of `openssl rand -hex 32`}
+    ports: ["127.0.0.1:${MCP_PUBLISHED_PORT:-8000}:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "mountain_intelligence.ops.healthcheck", "mcp"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    networks: [internal, public]
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "mountain_intelligence.config.celery", "worker", "--loglevel=INFO", "--concurrency=2"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A mountain_intelligence.config.celery inspect ping -d celery@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 15s
+      start_period: 30s
+      retries: 3
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    networks: [internal, public]   # needs egress to fetch authorized sources
+
+  scheduler:
+    <<: *app
+    command: ["celery", "-A", "mountain_intelligence.config.celery", "beat", "--loglevel=INFO",
+              "--pidfile=/tmp/celerybeat.pid", "--schedule=/tmp/celerybeat-schedule"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "mountain_intelligence.ops.healthcheck", "beat"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+    internal: true   # no egress for database/cache; app services join `public` only where needed
+  public: {}

@@ -1,0 +1,968 @@
+{
+ "format": "mountain-intelligence/products",
+ "version": 1,
+ "_comment": "SYNTHETIC demo fixtures. Brands, products, GTINs (GS1 internal-use prefix 200) and prices are invented and do not describe real products.",
+ "products": [
+  {
+   "external_id": "boot-alpine-gtx",
+   "canonical_url": "https://example.com/synthetic/boot-alpine-gtx",
+   "brand": "Example Outdoor",
+   "name": "Alpine GTX Example",
+   "category": "mountaineering_boot",
+   "generation": "",
+   "specifications": {
+    "rigidity": "semi_rigid",
+    "weight_g": 750,
+    "weight_basis": "per_boot",
+    "reference_size_eu": 43,
+    "boot_rating": "B2",
+    "crampon_attachment_types": [
+     "strap_on",
+     "semi_automatic"
+    ],
+    "toe_welt": false,
+    "heel_welt": true,
+    "waterproof": true,
+    "membrane": "Example-Tex",
+    "insulated": false
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/boot-alpine-gtx",
+     "currency": "EUR",
+     "price": "289.00",
+     "availability": "in_stock"
+    }
+   ],
+   "variants": [
+    {
+     "sku": "DEMO-00001",
+     "gtin": "2000000000015",
+     "size_label": "EU 41",
+     "size_eu": 41,
+     "color": "black"
+    },
+    {
+     "sku": "DEMO-00002",
+     "gtin": "2000000000022",
+     "size_label": "EU 42",
+     "size_eu": 42,
+     "color": "black"
+    },
+    {
+     "sku": "DEMO-00003",
+     "gtin": "2000000000039",
+     "size_label": "EU 43",
+     "size_eu": 43,
+     "color": "black"
+    },
+    {
+     "sku": "DEMO-00004",
+     "gtin": "2000000000046",
+     "size_label": "EU 44",
+     "size_eu": 44,
+     "color": "black"
+    }
+   ]
+  },
+  {
+   "external_id": "boot-summit-pro",
+   "canonical_url": "https://example.com/synthetic/boot-summit-pro",
+   "brand": "Example Outdoor",
+   "name": "Summit Pro Example",
+   "category": "mountaineering_boot",
+   "generation": "",
+   "specifications": {
+    "rigidity": "rigid",
+    "weight_g": 1900,
+    "weight_basis": "per_pair",
+    "reference_size_eu": 42,
+    "boot_rating": "B3",
+    "crampon_attachment_types": [
+     "strap_on",
+     "semi_automatic",
+     "automatic"
+    ],
+    "toe_welt": true,
+    "heel_welt": true,
+    "waterproof": true,
+    "membrane": "Example-Tex Insulated",
+    "insulated": true,
+    "integrated_gaiter": true
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/boot-summit-pro",
+     "currency": "EUR",
+     "price": "449.00",
+     "availability": "in_stock"
+    }
+   ],
+   "variants": [
+    {
+     "sku": "DEMO-00005",
+     "gtin": "2000000000053",
+     "size_label": "EU 40",
+     "size_eu": 40,
+     "color": "black"
+    },
+    {
+     "sku": "DEMO-00006",
+     "gtin": "2000000000060",
+     "size_label": "EU 42",
+     "size_eu": 42,
+     "color": "black"
+    },
+    {
+     "sku": "DEMO-00007",
+     "gtin": "2000000000077",
+     "size_label": "EU 44",
+     "size_eu": 44,
+     "color": "black"
+    }
+   ]
+  },
+  {
+   "external_id": "boot-trek-winter-lite",
+   "canonical_url": "https://example.com/synthetic/boot-trek-winter-lite",
+   "brand": "Demo Peaks",
+   "name": "Trek Winter Lite",
+   "category": "mountaineering_boot",
+   "generation": "",
+   "specifications": {
+    "rigidity": "semi_rigid",
+    "weight_g": 680,
+    "reference_size_eu": 42,
+    "boot_rating": "B1",
+    "crampon_attachment_types": [
+     "strap_on"
+    ],
+    "toe_welt": false,
+    "heel_welt": false,
+    "waterproof": true,
+    "insulated": false
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/boot-trek-winter-lite",
+     "currency": "EUR",
+     "price": "199.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "boot-ridge-mid",
+   "canonical_url": "https://example.com/synthetic/boot-ridge-mid",
+   "brand": "Synthetic Alpine Co",
+   "name": "Ridge Mid",
+   "category": "mountaineering_boot",
+   "generation": "",
+   "specifications": {
+    "rigidity": "flexible",
+    "weight_g": 620,
+    "weight_basis": "per_boot",
+    "reference_size_eu": 42,
+    "waterproof": true
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/boot-ridge-mid",
+     "currency": "EUR",
+     "price": "179.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "boot-couloir-light-2",
+   "canonical_url": "https://example.com/synthetic/boot-couloir-light-2",
+   "brand": "Synthetic Alpine Co",
+   "name": "Couloir Light",
+   "category": "mountaineering_boot",
+   "generation": "2",
+   "specifications": {
+    "rigidity": "semi_rigid",
+    "weight_g": 1500,
+    "weight_basis": "per_pair",
+    "reference_size_eu": 42,
+    "boot_rating": "B2",
+    "crampon_attachment_types": [
+     "strap_on",
+     "semi_automatic"
+    ],
+    "toe_welt": false,
+    "heel_welt": true,
+    "waterproof": true,
+    "insulated": false
+   }
+  },
+  {
+   "external_id": "boot-couloir-light-1",
+   "canonical_url": "https://example.com/synthetic/boot-couloir-light-1",
+   "brand": "Synthetic Alpine Co",
+   "name": "Couloir Light",
+   "category": "mountaineering_boot",
+   "generation": "1",
+   "specifications": {
+    "rigidity": "semi_rigid",
+    "weight_g": 1600,
+    "weight_basis": "per_pair",
+    "reference_size_eu": 42,
+    "boot_rating": "B2",
+    "crampon_attachment_types": [
+     "strap_on",
+     "semi_automatic"
+    ],
+    "toe_welt": false,
+    "heel_welt": true,
+    "waterproof": true,
+    "insulated": false
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/boot-couloir-light-1",
+     "currency": "EUR",
+     "price": "159.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "crampon-glacier-strap-12",
+   "canonical_url": "https://example.com/synthetic/crampon-glacier-strap-12",
+   "brand": "Example Outdoor",
+   "name": "Glacier Strap 12",
+   "category": "crampon",
+   "generation": "",
+   "specifications": {
+    "binding_types": [
+     "strap_on"
+    ],
+    "crampon_rating": "C1",
+    "points": 12,
+    "front_points": "horizontal_dual",
+    "material": "steel",
+    "weight_g": 980,
+    "weight_basis": "per_pair",
+    "boot_size_min_eu": 36,
+    "boot_size_max_eu": 47,
+    "anti_balling_plates": true,
+    "declared_standards": [
+     "EN 893"
+    ]
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/crampon-glacier-strap-12",
+     "currency": "EUR",
+     "price": "119.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "crampon-ice-lever-12",
+   "canonical_url": "https://example.com/synthetic/crampon-ice-lever-12",
+   "brand": "Demo Peaks",
+   "name": "Ice Lever 12",
+   "category": "crampon",
+   "generation": "",
+   "specifications": {
+    "binding_types": [
+     "semi_automatic"
+    ],
+    "crampon_rating": "C2",
+    "points": 12,
+    "front_points": "horizontal_dual",
+    "material": "steel",
+    "weight_g": 1010,
+    "weight_basis": "per_pair",
+    "boot_size_min_eu": 36,
+    "boot_size_max_eu": 46,
+    "anti_balling_plates": true,
+    "declared_standards": [
+     "EN 893",
+     "UIAA 153"
+    ]
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/crampon-ice-lever-12",
+     "currency": "EUR",
+     "price": "159.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "crampon-vertical-auto-14",
+   "canonical_url": "https://example.com/synthetic/crampon-vertical-auto-14",
+   "brand": "Demo Peaks",
+   "name": "Vertical Auto 14",
+   "category": "crampon",
+   "generation": "",
+   "specifications": {
+    "binding_types": [
+     "automatic"
+    ],
+    "crampon_rating": "C3",
+    "points": 14,
+    "front_points": "vertical_dual",
+    "material": "stainless_steel",
+    "weight_g": 1150,
+    "weight_basis": "per_pair",
+    "boot_size_min_eu": 37,
+    "boot_size_max_eu": 47,
+    "anti_balling_plates": true,
+    "declared_standards": [
+     "EN 893"
+    ]
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/crampon-vertical-auto-14",
+     "currency": "EUR",
+     "price": "229.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "crampon-light-alu-10",
+   "canonical_url": "https://example.com/synthetic/crampon-light-alu-10",
+   "brand": "Synthetic Alpine Co",
+   "name": "Light Alu 10",
+   "category": "crampon",
+   "generation": "",
+   "specifications": {
+    "binding_types": [
+     "strap_on",
+     "semi_automatic"
+    ],
+    "crampon_rating": "C2",
+    "points": 10,
+    "material": "aluminium",
+    "weight_g": 300,
+    "weight_basis": "per_crampon",
+    "boot_size_min_eu": 36,
+    "boot_size_max_eu": 45,
+    "anti_balling_plates": false
+   }
+  },
+  {
+   "external_id": "crampon-mystery",
+   "canonical_url": "https://example.com/synthetic/crampon-mystery",
+   "brand": "Example Outdoor",
+   "name": "Mystery Crampon",
+   "category": "crampon",
+   "generation": "",
+   "specifications": {
+    "points": 12,
+    "material": "steel"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/crampon-mystery",
+     "currency": "EUR",
+     "price": "99.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "pack-peak-35",
+   "canonical_url": "https://example.com/synthetic/pack-peak-35",
+   "brand": "Example Outdoor",
+   "name": "Peak 35 Example",
+   "category": "backpack",
+   "generation": "",
+   "specifications": {
+    "capacity_l": 35,
+    "weight_g": 1150,
+    "ice_axe_attachments": 2,
+    "rope_attachment": true,
+    "access": [
+     "top"
+    ],
+    "hip_belt": "padded",
+    "back_system": "framesheet",
+    "ski_carry": [
+     "a_frame"
+    ],
+    "fit": "unisex"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/pack-peak-35",
+     "currency": "EUR",
+     "price": "165.00",
+     "availability": "in_stock"
+    }
+   ],
+   "aliases": [
+    "Peak35"
+   ]
+  },
+  {
+   "external_id": "pack-peak-light-32",
+   "canonical_url": "https://example.com/synthetic/pack-peak-light-32",
+   "brand": "Example Outdoor",
+   "name": "Peak Light 32 Example",
+   "category": "backpack",
+   "generation": "",
+   "specifications": {
+    "capacity_l": 32,
+    "weight_g": 890,
+    "ice_axe_attachments": 1,
+    "rope_attachment": true,
+    "access": [
+     "top",
+     "side"
+    ],
+    "hip_belt": "webbing",
+    "back_system": "frameless",
+    "fit": "unisex"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/pack-peak-light-32",
+     "currency": "EUR",
+     "price": "139.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "pack-day-22",
+   "canonical_url": "https://example.com/synthetic/pack-day-22",
+   "brand": "Demo Peaks",
+   "name": "Day 22",
+   "category": "backpack",
+   "generation": "",
+   "specifications": {
+    "capacity_l": 22,
+    "weight_g": 700,
+    "ice_axe_attachments": 0,
+    "rope_attachment": false,
+    "access": [
+     "top"
+    ],
+    "hip_belt": "webbing",
+    "back_system": "suspended_mesh",
+    "hydration_compatible": true
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/pack-day-22",
+     "currency": "EUR",
+     "price": "89.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "pack-expedition-65",
+   "canonical_url": "https://example.com/synthetic/pack-expedition-65",
+   "brand": "Synthetic Alpine Co",
+   "name": "Expedition 65",
+   "category": "backpack",
+   "generation": "",
+   "specifications": {
+    "capacity_l": 65,
+    "weight_g": 2100,
+    "ice_axe_attachments": 2,
+    "rope_attachment": true,
+    "access": [
+     "top",
+     "front_panel"
+    ],
+    "hip_belt": "padded",
+    "back_system": "internal_frame",
+    "max_load_g": 25000
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/pack-expedition-65",
+     "currency": "EUR",
+     "price": "249.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "pack-alpine-40",
+   "canonical_url": "https://example.com/synthetic/pack-alpine-40",
+   "brand": "Synthetic Alpine Co",
+   "name": "Alpine 40",
+   "category": "backpack",
+   "generation": "",
+   "specifications": {
+    "capacity_l": 40,
+    "ice_axe_attachments": 2,
+    "rope_attachment": true,
+    "access": [
+     "top"
+    ]
+   }
+  },
+  {
+   "external_id": "shell-storm-3l",
+   "canonical_url": "https://example.com/synthetic/shell-storm-3l",
+   "brand": "Example Outdoor",
+   "name": "Storm Shell 3L Example",
+   "category": "hardshell_jacket",
+   "generation": "",
+   "specifications": {
+    "construction": "3_layer",
+    "weight_g": 420,
+    "weight_reference_size": "M",
+    "membrane": "Example-Tex Pro",
+    "waterproof_rating_mm": 28000,
+    "waterproof_test_method": "ISO 811",
+    "breathability_ret": 4.5,
+    "breathability_test_method": "ISO 11092",
+    "ventilation": [
+     "pit_zips"
+    ],
+    "hood": "helmet_compatible",
+    "fit": "men"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/shell-storm-3l",
+     "currency": "EUR",
+     "price": "329.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "shell-trail-25l",
+   "canonical_url": "https://example.com/synthetic/shell-trail-25l",
+   "brand": "Demo Peaks",
+   "name": "Trail Shell 2.5L",
+   "category": "hardshell_jacket",
+   "generation": "",
+   "specifications": {
+    "construction": "2_5_layer",
+    "weight_g": 280,
+    "weight_reference_size": "M",
+    "breathability_mvtr": 20000,
+    "breathability_test_method": "JIS L 1099 B1",
+    "waterproof_rating_mm": 20000,
+    "hood": "stowable",
+    "fit": "unisex"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/shell-trail-25l",
+     "currency": "EUR",
+     "price": "149.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "shell-guide",
+   "canonical_url": "https://example.com/synthetic/shell-guide",
+   "brand": "Synthetic Alpine Co",
+   "name": "Guide Shell",
+   "category": "hardshell_jacket",
+   "generation": "",
+   "specifications": {
+    "construction": "3_layer",
+    "weight_g": 510,
+    "weight_reference_size": "L",
+    "breathability_ret": 6,
+    "breathability_test_method": "ISO 11092",
+    "ventilation": [
+     "pit_zips",
+     "two_way_front_zip"
+    ],
+    "hood": "helmet_compatible"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/shell-guide",
+     "currency": "EUR",
+     "price": "389.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "shell-budget",
+   "canonical_url": "https://example.com/synthetic/shell-budget",
+   "brand": "Demo Peaks",
+   "name": "Budget Shell",
+   "category": "hardshell_jacket",
+   "generation": "",
+   "specifications": {
+    "construction": "2_layer",
+    "weight_g": 390,
+    "waterproof_rating_mm": 10000,
+    "hood": "fixed"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/shell-budget",
+     "currency": "EUR",
+     "price": "79.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "shell-ultra",
+   "canonical_url": "https://example.com/synthetic/shell-ultra",
+   "brand": "Example Outdoor",
+   "name": "Ultra Shell Example",
+   "category": "hardshell_jacket",
+   "generation": "",
+   "specifications": {
+    "construction": "3_layer",
+    "weight_g": 190,
+    "weight_reference_size": "M",
+    "breathability_ret": 5,
+    "hood": "fixed"
+   }
+  },
+  {
+   "external_id": "insulated-down-hoody",
+   "canonical_url": "https://example.com/synthetic/insulated-down-hoody",
+   "brand": "Example Outdoor",
+   "name": "Down Hoody Example",
+   "category": "insulated_jacket",
+   "generation": "",
+   "specifications": {
+    "insulation_type": "down",
+    "fill_weight_g": 120,
+    "fill_power": 800,
+    "fill_power_method": "IDFB",
+    "hood": true,
+    "weight_g": 380,
+    "weight_reference_size": "M"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/insulated-down-hoody",
+     "currency": "EUR",
+     "price": "259.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "insulated-synthetic-belay",
+   "canonical_url": "https://example.com/synthetic/insulated-synthetic-belay",
+   "brand": "Demo Peaks",
+   "name": "Synthetic Belay Parka",
+   "category": "insulated_jacket",
+   "generation": "",
+   "specifications": {
+    "insulation_type": "synthetic",
+    "fill_weight_g": 133,
+    "hood": true,
+    "weight_g": 620
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/insulated-synthetic-belay",
+     "currency": "EUR",
+     "price": "219.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "insulated-hybrid-vest",
+   "canonical_url": "https://example.com/synthetic/insulated-hybrid-vest",
+   "brand": "Synthetic Alpine Co",
+   "name": "Hybrid Jacket",
+   "category": "insulated_jacket",
+   "generation": "",
+   "specifications": {
+    "insulation_type": "hybrid",
+    "hood": false,
+    "weight_g": 340
+   }
+  },
+  {
+   "external_id": "mid-grid-hoody",
+   "canonical_url": "https://example.com/synthetic/mid-grid-hoody",
+   "brand": "Example Outdoor",
+   "name": "Grid Hoody Example",
+   "category": "midlayer",
+   "generation": "",
+   "specifications": {
+    "fabric_type": "grid_fleece",
+    "material": "Polyester grid fleece",
+    "fabric_weight_gsm": 150,
+    "hood": true,
+    "zip": "full",
+    "weight_g": 330
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/mid-grid-hoody",
+     "currency": "EUR",
+     "price": "89.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "mid-classic-fleece",
+   "canonical_url": "https://example.com/synthetic/mid-classic-fleece",
+   "brand": "Demo Peaks",
+   "name": "Classic Fleece",
+   "category": "midlayer",
+   "generation": "",
+   "specifications": {
+    "fabric_type": "fleece",
+    "fabric_weight_gsm": 200,
+    "hood": false,
+    "zip": "quarter",
+    "weight_g": 380
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/mid-classic-fleece",
+     "currency": "EUR",
+     "price": "49.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "axe-classic-60",
+   "canonical_url": "https://example.com/synthetic/axe-classic-60",
+   "brand": "Example Outdoor",
+   "name": "Classic Axe 60",
+   "category": "ice_axe",
+   "generation": "",
+   "specifications": {
+    "intended_use": "walking_mountaineering",
+    "length_mm": 600,
+    "weight_g": 480,
+    "shaft": "straight",
+    "en13089_shaft_type": "B",
+    "en13089_head_type": "B",
+    "declared_standards": [
+     "EN 13089"
+    ]
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/axe-classic-60",
+     "currency": "EUR",
+     "price": "79.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "axe-tech-50",
+   "canonical_url": "https://example.com/synthetic/axe-tech-50",
+   "brand": "Demo Peaks",
+   "name": "Tech Axe 50",
+   "category": "ice_axe",
+   "generation": "",
+   "specifications": {
+    "intended_use": "technical_mountaineering",
+    "length_mm": 500,
+    "weight_g": 520,
+    "shaft": "curved",
+    "en13089_shaft_type": "T",
+    "en13089_head_type": "T",
+    "declared_standards": [
+     "EN 13089"
+    ]
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/axe-tech-50",
+     "currency": "EUR",
+     "price": "149.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "axe-light-65",
+   "canonical_url": "https://example.com/synthetic/axe-light-65",
+   "brand": "Synthetic Alpine Co",
+   "name": "Light Axe 65",
+   "category": "ice_axe",
+   "generation": "",
+   "specifications": {
+    "intended_use": "ski_touring",
+    "length_mm": 650,
+    "weight_g": 260,
+    "shaft": "straight"
+   }
+  },
+  {
+   "external_id": "helmet-shield",
+   "canonical_url": "https://example.com/synthetic/helmet-shield",
+   "brand": "Example Outdoor",
+   "name": "Shield Helmet",
+   "category": "climbing_helmet",
+   "generation": "",
+   "specifications": {
+    "weight_g": 330,
+    "head_circumference_min_mm": 530,
+    "head_circumference_max_mm": 610,
+    "construction": "hybrid",
+    "ventilated": true,
+    "declared_standards": [
+     "EN 12492"
+    ]
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/helmet-shield",
+     "currency": "EUR",
+     "price": "69.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "helmet-feather",
+   "canonical_url": "https://example.com/synthetic/helmet-feather",
+   "brand": "Demo Peaks",
+   "name": "Feather Helmet",
+   "category": "climbing_helmet",
+   "generation": "",
+   "specifications": {
+    "weight_g": 210,
+    "head_circumference_min_mm": 520,
+    "head_circumference_max_mm": 600,
+    "construction": "in_mold",
+    "declared_standards": [
+     "EN 12492",
+     "UIAA 106"
+    ]
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/helmet-feather",
+     "currency": "EUR",
+     "price": "109.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "hikeboot-trailmaster",
+   "canonical_url": "https://example.com/synthetic/hikeboot-trailmaster",
+   "brand": "Example Outdoor",
+   "name": "Trailmaster Mid Example",
+   "category": "hiking_boot",
+   "generation": "",
+   "specifications": {
+    "weight_g": 560,
+    "weight_basis": "per_boot",
+    "reference_size_eu": 42,
+    "rigidity": "flexible",
+    "cuff_height": "mid",
+    "waterproof": true,
+    "membrane": "Example-Tex"
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/hikeboot-trailmaster",
+     "currency": "EUR",
+     "price": "149.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "hikeboot-winter-hiker",
+   "canonical_url": "https://example.com/synthetic/hikeboot-winter-hiker",
+   "brand": "Demo Peaks",
+   "name": "Winter Hiker",
+   "category": "hiking_boot",
+   "generation": "",
+   "specifications": {
+    "weight_g": 1400,
+    "weight_basis": "per_pair",
+    "reference_size_eu": 42,
+    "rigidity": "semi_rigid",
+    "cuff_height": "high",
+    "waterproof": true,
+    "crampon_attachment_types": [
+     "strap_on"
+    ]
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/hikeboot-winter-hiker",
+     "currency": "EUR",
+     "price": "189.00",
+     "availability": "in_stock"
+    }
+   ]
+  },
+  {
+   "external_id": "trail-grip-6",
+   "canonical_url": "https://example.com/synthetic/trail-grip-6",
+   "brand": "Example Outdoor",
+   "name": "Grip 6 Example",
+   "category": "trail_running_shoe",
+   "generation": "",
+   "specifications": {
+    "weight_g": 290,
+    "weight_basis": "per_boot",
+    "reference_size_eu": 42,
+    "drop_mm": 6,
+    "lug_depth_mm": 5,
+    "terrain": [
+     "trail",
+     "technical",
+     "mud"
+    ],
+    "waterproof": false
+   },
+   "offers": [
+    {
+     "retailer": "Demo Shop (synthetic)",
+     "url": "https://example.com/synthetic/shop/trail-grip-6",
+     "currency": "EUR",
+     "price": "139.00",
+     "availability": "in_stock"
+    }
+   ]
+  }
+ ]
+}

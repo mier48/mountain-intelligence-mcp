@@ -1,0 +1,64 @@
+[project]
+name = "mountain-intelligence-mcp"
+version = "0.1.0"
+description = "Read-only MCP server exposing a traceable technical catalog of mountain and outdoor equipment."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+dependencies = [
+    "django>=5.2.19,<5.3",          # 5.2 LTS (supported until April 2028)
+    "mcp>=2.3.0,<2.4",              # official MCP Python SDK (v2 line)
+    "psycopg[binary]>=3.3.9,<3.4",
+    "pydantic>=2.14,<3",
+    "celery[redis]>=5.7,<5.8",
+    "httpx2>=2.16.2,<3",            # already required by the MCP SDK; reused for ingestion
+    "selectolax>=1.0.2,<2",
+    "pyyaml>=6.0.4,<7",
+    "starlette>=1.10,<2",           # ASGI app served by the MCP SDK
+    "uvicorn>=0.54,<1",
+]
+
+[project.scripts]
+mountain-intelligence-mcp = "mountain_intelligence.mcp_server.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2,<10",
+    "pytest-django>=4.14,<5",
+    "ruff>=0.17.6,<0.18",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mountain_intelligence"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "mountain_intelligence.config.settings"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "live_source: opt-in tests that contact real external sources (require MI_RUN_LIVE_SOURCE_TESTS=1)",
+    "protocol: end-to-end MCP protocol tests that spawn server processes",
+]
+filterwarnings = ["ignore::DeprecationWarning:celery.*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["**/migrations/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "DJ", "SIM", "RUF", "PL", "C4"]
+ignore = [
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004",  # complexity heuristics: reviewed manually
+    "RUF012",   # Django Meta/class attributes
+    "S101",     # asserts are used in tests
+    "PLC0415",  # deliberate lazy imports (Django app loading order, optional paths)
+    "PLR0917",  # keyword-heavy domain functions
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "DJ", "RUF001"]

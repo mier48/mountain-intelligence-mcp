@@ -1,0 +1,58 @@
+# Versioned compatibility rules. Load with: python manage.py load_compatibility_rules data/compatibility_rules.yaml
+#
+# The rule logic lives in tested code (`evaluator`); this file pins version, scope, parameters and
+# references. Changing evaluator/parameters of a loaded version is rejected: publish a new version.
+# Only the highest `published` version of a relation is used. Last reviewed: 2026-11-24.
+version: 1
+rules:
+  - key: boot-crampon-binding-type
+    version: 1
+    relation: boot_crampon
+    source_category: mountaineering_boot
+    target_category: crampon
+    evaluator: binding_type_match
+    parameters:
+      boot_categories: [mountaineering_boot, hiking_boot]
+    status: retired
+    description: >-
+      Superseded by v2 (adds B/C rating matrix, parameterised welt requirements and large-size note).
+    references:
+      - "Manufacturer declarations stored as specification evidence for each product."
+
+  - key: boot-crampon-binding-type
+    version: 2
+    relation: boot_crampon
+    source_category: mountaineering_boot
+    target_category: crampon
+    evaluator: binding_type_match
+    parameters:
+      boot_categories: [mountaineering_boot, hiking_boot]
+      # Which welts each generic binding needs. Strap-on (C1-style baskets) fits boots without welts;
+      # semi-automatic uses a heel lever (heel welt); automatic adds a toe bail (toe and heel welts).
+      welt_requirements:
+        strap_on: []
+        semi_automatic: [heel_welt]
+        automatic: [toe_welt, heel_welt]
+      # B/C stiffness guidance (Brian Hall scheme, used by the BMC and the trade): the crampon should
+      # never be stiffer than the boot. B0 boots are not suitable for crampons.
+      rating_matrix:
+        B0: []
+        B1: [C1]
+        B2: [C1, C2]
+        B3: [C1, C2, C3]
+      # Larger boots flex more than their nominal rating (a size-47 B2 may behave like a B1).
+      large_boot_size_eu: 46
+    status: published
+    description: >-
+      Compares the binding types declared by the boot manufacturer with the binding configurations
+      declared by the crampon manufacturer; checks the welts each binding needs; applies the B/C
+      stiffness guidance when both ratings are declared (outside the matrix = documented
+      incompatibility); checks the declared boot-size range; and considers documented pair-level
+      statements. Matching types yield `conditional` (never `compatible`) unless a pair-level
+      statement exists and nothing contradicts it.
+    references:
+      - "BMC - Walking boots, crampons and micro spikes: B0 not suitable for crampons; B1 only with C1; B3 takes C1-C3; get crampons fitted to the boot. https://thebmc.co.uk/en/walking-boots-crampons-micro-spikes"
+      - "Needle Sports - Boot/Crampon compatibility (Brian Hall scheme): crampons no stiffer than boots; strap-on fits all boots, semi step-in needs a proper heel welt, full step-in heel and toe welts; large boots flex more. https://needlesports.com/Information/Need-Advice/BootCrampon-Compatibilty"
+      - "Petzl - Choosing your crampons: FLEXLOCK / LEVERLOCK UNIVERSEL / LEVERLOCK FIL for footwear with or without welts. https://www.petzl.com/INT/en/Sport/Crampons/How-to-choose"
+      - "Grivel - Binding systems: New-Classic, New-Matic (heel welt), Cramp-O-Matic (toe and heel welts). https://grivel.com/blogs/news/grivel-binding-systems"
+      - "Scarpa UK - Crampons guide: B1 boots only with C1; B2 with C1/C2; B3 with C2/C3. https://www.scarpa.co.uk/blogs/blog/crampons-guide"

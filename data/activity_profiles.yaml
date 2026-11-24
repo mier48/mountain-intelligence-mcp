@@ -1,0 +1,359 @@
+# Activity profiles (versioned). Load with: python manage.py load_activity_profiles data/activity_profiles.yaml
+#
+# Status: orientative starting point compiled from published kit lists and guidance (see `references`
+# in each profile), marked `pending_expert_review`. Every MCP answer that uses a profile says so. A
+# qualified mountain professional should review them, then set review_status: reviewed, reviewed_by
+# and reviewed_at. A loaded version is immutable: edit by publishing a new version (old versions stay
+# in the database, inactive). Last research pass: 2026-11-24.
+#
+# Semantics
+# - `requirements` with mandatory: true are exclusion filters; an unknown value sends the candidate
+#   to "requires verification", never to "recommended".
+# - `preferences` only affect ranking (weights are relative within a category need).
+# - `applies_if` clauses use the user's conditions; an unknown condition is treated conservatively
+#   (requirement applied, flagged as "applies_unknown_condition").
+# - Standards (EN/UIAA) are matched tolerantly ("EN 12492:2012" == "EN 12492") and are always
+#   "declared by the manufacturer", never certified by this system.
+# - Nothing here evaluates whether a route, a day or a person is safe.
+version: 1
+profiles:
+  # ------------------------------------------------------------------------------------------
+  - key: winter_mountaineering
+    version: 2
+    name_en: Winter mountaineering
+    name_es: Alpinismo invernal
+    review_status: pending_expert_review
+    definition:
+      description_en: >-
+        Non-technical to moderate winter mountaineering on snow and ice (e.g. normal routes and easy
+        gullies in winter, as in the Cantabrian range or the Pyrenees).
+      description_es: >-
+        Alpinismo invernal no técnico o de dificultad moderada sobre nieve y hielo (p. ej. vías
+        normales y corredores fáciles en invierno, como en la Cordillera Cantábrica o el Pirineo).
+      context_questions: [snow, ice, min_temperature_c]
+      needs:
+        - category: mountaineering_boot
+          importance: essential
+          rationale: >-
+            Boots must take crampons all day and protect from cold and wet snow; training providers
+            ask for B2/B3 boots for winter mountaineering, and federation courses recommend rigid soles.
+          requirements:
+            - field: crampon_attachment_types
+              op: contains_any
+              value: [strap_on, semi_automatic, automatic]
+              mandatory: true
+              applies_if: {snow_or_ice: true}
+              rationale: On snow or ice crampons are expected; the boot manufacturer must declare crampon compatibility.
+          preferences:
+            - {field: boot_rating, op: in, value: [B2, B3], weight: 0.35,
+               rationale: "B2/B3 boots are the usual requirement for winter mountaineering (stiff sole, all-day crampon use)."}
+            - {field: crampon_attachment_types, op: contains_any, value: [semi_automatic, automatic], weight: 0.2,
+               rationale: "Declared heel-lever compatibility allows C2 semi-automatic crampons."}
+            - {field: rigidity, op: in, value: [semi_rigid, rigid], weight: 0.15,
+               rationale: "A stiffer sole is preferred for kicking steps and crampon use."}
+            - {field: waterproof, op: eq, value: true, weight: 0.15, rationale: "Many hours in contact with snow."}
+            - {field: insulated, op: eq, value: true, weight: 0.15, applies_if: {min_temperature_below_c: -10},
+               rationale: "Very low temperatures increase the value of declared insulation."}
+        - category: crampon
+          importance: essential
+          applies_if: {snow_or_ice: true}
+          rationale: Crampons are expected on hard snow and ice; type, stiffness and fit must match the boot.
+          requirements:
+            - {field: binding_types, op: contains_any, value: [strap_on, semi_automatic, automatic], mandatory: true,
+               rationale: "The binding type must be declared to check compatibility with the boot."}
+          preferences:
+            - {field: anti_balling_plates, op: eq, value: true, weight: 0.3,
+               rationale: "Anti-balling plates reduce snow build-up; recommended by the BMC and course kit lists."}
+            - {field: points, op: gte, value: 12, weight: 0.25,
+               rationale: "Winter mountaineering kit lists ask for a 12-point mountaineering crampon."}
+            - {field: declared_standards, op: contains, value: ["EN 893"], weight: 0.25,
+               rationale: "Crampons are PPE; walking crampons meet a PPE standard that microspikes do not."}
+            - {field: material, op: in, value: [steel, stainless_steel], weight: 0.2, applies_if: {ice: true},
+               rationale: "Steel is usually preferred over aluminium when hard ice is expected."}
+        - category: ice_axe
+          importance: essential
+          applies_if: {snow_or_ice: true}
+          rationale: A walking/mountaineering axe is the usual tool for balance and self-arrest on steep snow.
+          preferences:
+            - {field: intended_use, op: in, value: [walking_mountaineering, technical_mountaineering], weight: 0.3,
+               rationale: "A walking/mountaineering axe rather than a light ski-touring or technical climbing tool."}
+            - {field: length_mm, op: gte, value: 500, weight: 0.2,
+               rationale: "Course kit lists suggest 50-60 cm (55-60 cm) for walking axes; fit it to the user."}
+            - {field: length_mm, op: lte, value: 600, weight: 0.2,
+               rationale: "Course kit lists suggest 50-60 cm (55-60 cm) for walking axes; fit it to the user."}
+            - {field: declared_standards, op: contains, value: ["EN 13089"], weight: 0.3,
+               rationale: "EN 13089 (UIAA 152) is the ice-tool safety standard."}
+        - category: climbing_helmet
+          importance: recommended
+          rationale: Protection against falling ice/rock and falls; most winter course days require one.
+          preferences:
+            - {field: declared_standards, op: contains, value: ["EN 12492"], weight: 0.6,
+               rationale: "EN 12492 (UIAA 106) is the mountaineering helmet standard."}
+            - {field: weight_g, op: lte, value: 350, weight: 0.4, rationale: "Lighter helmets are more likely to be worn."}
+        - category: hardshell_jacket
+          importance: essential
+          rationale: Protection from wind and precipitation.
+          preferences:
+            - {field: hood, op: eq, value: helmet_compatible, weight: 0.35, rationale: "Hood usable over a helmet."}
+            - {field: construction, op: eq, value: 3_layer, weight: 0.25, rationale: "3-layer laminates are common for mountaineering durability."}
+            - {field: ventilation, op: contains, value: [pit_zips], weight: 0.2, rationale: "Ventilation helps manage sweat during ascents."}
+            - {field: waterproof_rating_mm, op: gte, value: 10000, weight: 0.2,
+               rationale: "10,000 mm is the minimum recommended by mountain-race regulations for a waterproof shell."}
+        - category: insulated_jacket
+          importance: essential
+          applies_if: {min_temperature_below_c: 5}
+          rationale: Warm layer for stops and emergencies in cold conditions.
+          preferences:
+            - {field: hood, op: eq, value: true, weight: 0.5, rationale: "A hood adds significant warmth."}
+            - {field: weight_g, op: lte, value: 600, weight: 0.5, rationale: "Packability for a day pack."}
+        - category: midlayer
+          importance: recommended
+          rationale: Insulating layer while moving.
+        - category: backpack
+          importance: essential
+          rationale: Must carry crampons, axe, layers, food and water.
+          preferences:
+            - {field: ice_axe_attachments, op: gte, value: 1, weight: 0.4, rationale: "Carrying the ice axe when not in use."}
+            - {field: capacity_l, op: gte, value: 30, weight: 0.3,
+               rationale: "Day packs of 30-40 L are typical for snow ascents; courses ask for 40-50 L."}
+            - {field: capacity_l, op: lte, value: 50, weight: 0.3, rationale: "Avoid an oversized pack for day outings."}
+      general_notes:
+        - "Equipment does not make an activity safe: check the weather and avalanche bulletins and turn back if needed."
+        - "Crampon and ice-axe technique (including self-arrest) needs training; beginners should consider a federation course or a certified guide."
+        - "In avalanche terrain carry and know how to use a transceiver (DVA/ARVA), shovel and probe; they are not in this catalog."
+        - "Have crampons fitted to your boots in a shop and check the fit before the outing."
+        - "Gaiters, gloves (at least two pairs), goggles/sunglasses and a headtorch are part of the usual kit but are not catalogued."
+      references:
+        - "Plas y Brenin (Mountain Training Trust) - Welsh winter mountaineering kit list: B2/B3 boots, 55-60 cm walking axe, crampons with anti-balling plates compatible with the boots, climbing helmet. https://pyb.co.uk/?p=92526"
+        - "Plas y Brenin - Winter Mountain Leader 2026 kit list: 12-point mountaineering crampon with anti-balling plate. https://pyb.co.uk/wp-content/uploads/2026/06/WinterMountainLeader2026.pdf"
+        - "FEMECV - Curso de alpinismo nivel I: botas impermeables (recomendable suela rígida), mochila 40/50 l, arnés y casco, crampones y piolet. https://tienda.femecv.com/sites/default/files/2026-02/CURSO%20DE%20ALPINISMO%20NIVEL%20I._1.pdf"
+        - "Petzl - El equipo básico para alpinismo: mochila 30-40 l, piolet clásico, casco, crampones con antisnow, botas calientes, impermeables y cramponables. https://www.petzl.com/INT/es/Sport/Novedades/2016-6-29/El-equipo-basico-para-alpinismo"
+        - "FAM - Material curso alta montaña: DVA/ARVA, pala y sonda. https://fam.es/documentos/eam/1685-anexo-i-material-curso-alta-montana/file"
+        - "BMC - Walking boots, crampons and micro spikes. https://thebmc.co.uk/en/walking-boots-crampons-micro-spikes"
+        - "UIAA safety standards (UIAA 106 helmets / EN 12492; UIAA 152 ice tools / EN 13089; UIAA 153 crampons). https://www.theuiaa.org/safety/safety-standards/"
+
+  # ------------------------------------------------------------------------------------------
+  - key: summer_alpine_mountaineering
+    version: 1
+    name_en: Summer alpine mountaineering (glacier and normal routes)
+    name_es: Alpinismo estival (glaciar y vías normales)
+    review_status: pending_expert_review
+    definition:
+      description_en: Summer ascents of normal routes with snow, glacier or ice sections in the Alps or Pyrenees.
+      description_es: Ascensiones estivales por vías normales con tramos de nieve, glaciar o hielo en Alpes o Pirineos.
+      context_questions: [ice, min_temperature_c]
+      needs:
+        - category: mountaineering_boot
+          importance: essential
+          rationale: Crampon-compatible, waterproof boots for snow and glacier sections.
+          requirements:
+            - {field: crampon_attachment_types, op: contains_any, value: [strap_on, semi_automatic, automatic],
+               mandatory: true, rationale: "Glacier and snow sections require crampons; compatibility must be declared."}
+          preferences:
+            - {field: boot_rating, op: in, value: [B2, B3], weight: 0.4, rationale: "Stiff boots for long crampon sections."}
+            - {field: waterproof, op: eq, value: true, weight: 0.3, rationale: "Wet snow on glaciers."}
+            - {field: weight_per_boot_g, op: lte, value: 900, weight: 0.3, rationale: "Long approaches favour lighter boots."}
+        - category: crampon
+          importance: essential
+          rationale: Glacier travel and snow slopes.
+          requirements:
+            - {field: binding_types, op: contains_any, value: [strap_on, semi_automatic, automatic], mandatory: true,
+               rationale: "The binding type must be declared to check compatibility with the boot."}
+          preferences:
+            - {field: anti_balling_plates, op: eq, value: true, weight: 0.35, rationale: "Summer snow balls up easily."}
+            - {field: declared_standards, op: contains, value: ["EN 893"], weight: 0.35, rationale: "Crampons are PPE (EN 893 / UIAA 153)."}
+            - {field: points, op: gte, value: 10, weight: 0.3, rationale: "10-12 points for glacier travel and classic routes."}
+        - category: ice_axe
+          importance: essential
+          rationale: Classic mountaineering axe for balance and self-arrest.
+          preferences:
+            - {field: intended_use, op: eq, value: walking_mountaineering, weight: 0.4, rationale: "Classic axe for normal routes."}
+            - {field: declared_standards, op: contains, value: ["EN 13089"], weight: 0.3, rationale: "EN 13089 (UIAA 152) ice-tool standard."}
+            - {field: length_mm, op: lte, value: 650, weight: 0.3, rationale: "Moderate length for mountaineering; fit it to the user."}
+        - category: climbing_helmet
+          importance: essential
+          rationale: Rockfall and icefall are frequent on summer alpine routes.
+          preferences:
+            - {field: declared_standards, op: contains, value: ["EN 12492"], weight: 0.6, rationale: "EN 12492 (UIAA 106) helmet standard."}
+            - {field: weight_g, op: lte, value: 350, weight: 0.4, rationale: "Lighter helmets are more likely to be worn."}
+        - category: hardshell_jacket
+          importance: essential
+          rationale: Weather at altitude changes quickly.
+          preferences:
+            - {field: hood, op: eq, value: helmet_compatible, weight: 0.5, rationale: "Hood usable over a helmet."}
+            - {field: weight_g, op: lte, value: 450, weight: 0.5, rationale: "Weight matters on long ascents."}
+        - category: insulated_jacket
+          importance: recommended
+          applies_if: {min_temperature_below_c: 5}
+          rationale: Early starts and summits are cold even in summer.
+        - category: backpack
+          importance: essential
+          rationale: Carry technical gear, layers, food and water.
+          preferences:
+            - {field: capacity_l, op: gte, value: 30, weight: 0.35, rationale: "Day pack 30-40 L for snow ascents."}
+            - {field: capacity_l, op: lte, value: 45, weight: 0.25, rationale: "Avoid an oversized pack."}
+            - {field: ice_axe_attachments, op: gte, value: 1, weight: 0.4, rationale: "Carry the axe when not in use."}
+      general_notes:
+        - "Glacier travel also needs a harness, rope, connectors and crevasse-rescue skills; they are not in this catalog."
+        - "Check route conditions, rockfall risk and weather with local guides or huts; summer heat makes snow bridges weaker."
+      references:
+        - "Petzl - El equipo básico para alpinismo (mochila 30-40 l, piolet clásico, cuerda, arnés, casco, crampones con antisnow). https://www.petzl.com/INT/es/Sport/Novedades/2016-6-29/El-equipo-basico-para-alpinismo"
+        - "Petzl - Choosing your crampons (glacier travel and classic mountaineering models). https://www.petzl.com/INT/en/Sport/Crampons/How-to-choose"
+        - "UIAA safety standards. https://www.theuiaa.org/safety/safety-standards/"
+
+  # ------------------------------------------------------------------------------------------
+  - key: winter_hiking
+    version: 2
+    name_en: Winter hiking
+    name_es: Senderismo invernal
+    review_status: pending_expert_review
+    definition:
+      description_en: Hiking on trails in cold conditions with possible snow, outside steep or technical terrain.
+      description_es: Senderismo por senderos en condiciones frías con posible nieve, fuera de terreno empinado o técnico.
+      context_questions: [snow, ice, min_temperature_c]
+      needs:
+        - category: hiking_boot
+          importance: essential
+          rationale: Waterproof, supportive footwear for cold and wet trails.
+          preferences:
+            - {field: waterproof, op: eq, value: true, weight: 0.35, rationale: "Snow and wet trails."}
+            - {field: cuff_height, op: in, value: [mid, high], weight: 0.25, rationale: "Higher cuffs keep snow out."}
+            - {field: boot_rating, op: in, value: [B1, B2], weight: 0.2, applies_if: {snow_or_ice: true},
+               rationale: "B1 is the minimum stiffness for crampons on easy snowy or icy sections; B0 boots are not suitable."}
+            - {field: crampon_attachment_types, op: contains_any, value: [strap_on, semi_automatic, automatic],
+               weight: 0.2, applies_if: {ice: true}, rationale: "Allows strap-on crampons if icy sections appear."}
+        - category: crampon
+          importance: recommended
+          applies_if: {ice: true}
+          rationale: Short icy sections on easy ground; a flexible strap-on crampon fits B1 boots.
+          requirements:
+            - {field: binding_types, op: contains_any, value: [strap_on, semi_automatic, automatic], mandatory: true,
+               rationale: "The binding type must be declared to check compatibility with the boot."}
+          preferences:
+            - {field: binding_types, op: contains, value: [strap_on], weight: 0.4,
+               rationale: "Strap-on (C1-style) bindings fit boots without welts."}
+            - {field: crampon_rating, op: eq, value: C1, weight: 0.3, rationale: "C1 is the only rating suited to B1 boots."}
+            - {field: anti_balling_plates, op: eq, value: true, weight: 0.3, rationale: "Reduces snow build-up."}
+        - category: hardshell_jacket
+          importance: essential
+          rationale: Wind and precipitation protection.
+          preferences:
+            - {field: ventilation, op: contains, value: [pit_zips], weight: 0.4, rationale: "Ventilation while walking."}
+            - {field: weight_g, op: lte, value: 500, weight: 0.3, rationale: "Lighter shells are easier to carry."}
+            - {field: waterproof_rating_mm, op: gte, value: 10000, weight: 0.3,
+               rationale: "10,000 mm is a widely used minimum for a waterproof shell in the mountains."}
+        - category: insulated_jacket
+          importance: essential
+          applies_if: {min_temperature_below_c: 5}
+          rationale: Warm layer for stops.
+          preferences:
+            - {field: hood, op: eq, value: true, weight: 1.0, rationale: "A hood adds significant warmth."}
+        - category: midlayer
+          importance: recommended
+          rationale: Insulation while moving.
+        - category: backpack
+          importance: essential
+          rationale: Carry layers, food and water.
+          preferences:
+            - {field: capacity_l, op: gte, value: 20, weight: 0.5, rationale: "Room for winter layers."}
+            - {field: capacity_l, op: lte, value: 40, weight: 0.5, rationale: "Day-trip size."}
+      general_notes:
+        - "Microspikes only suit flat or gently sloping paths with compacted snow or ice; they are not PPE and not for steep terrain."
+        - "If the route includes steep snow or ice it becomes winter mountaineering: use that profile instead."
+        - "Days are short in winter: plan with margin and carry a headtorch."
+      references:
+        - "BMC - Walking boots, crampons and micro spikes (B0 not for crampons; B1 minimum; microspikes limits). https://thebmc.co.uk/en/walking-boots-crampons-micro-spikes"
+        - "Ellis Brigham - Crampons buying guide (C1 is the only crampon compatible with B1 boots). https://www.ellis-brigham.com/crampons/crampons-buying-guide"
+
+  # ------------------------------------------------------------------------------------------
+  - key: hiking_trekking
+    version: 2
+    name_en: Hiking and trekking (three-season)
+    name_es: Senderismo y trekking (tres estaciones)
+    review_status: pending_expert_review
+    definition:
+      description_en: Day hikes and multi-day treks on trails without snow or ice.
+      description_es: Excursiones de un día y trekkings de varios días por senderos sin nieve ni hielo.
+      context_questions: [duration_hours, rain]
+      needs:
+        - category: hiking_boot
+          importance: essential
+          rationale: Supportive footwear with grip for trails.
+          preferences:
+            - {field: waterproof, op: eq, value: true, weight: 0.3, applies_if: {rain: true}, rationale: "Wet conditions expected."}
+            - {field: weight_per_boot_g, op: lte, value: 700, weight: 0.4, rationale: "Lighter footwear reduces fatigue."}
+            - {field: cuff_height, op: in, value: [mid, high], weight: 0.3, applies_if: {duration_hours_at_least: 24},
+               rationale: "Heavier multi-day loads favour more ankle support."}
+        - category: hardshell_jacket
+          importance: essential
+          rationale: Rain and wind protection.
+          preferences:
+            - {field: weight_g, op: lte, value: 450, weight: 0.4, rationale: "A layer that often stays in the pack should be light."}
+            - {field: ventilation, op: contains, value: [pit_zips], weight: 0.3, rationale: "Ventilation when walking in rain."}
+            - {field: waterproof_rating_mm, op: gte, value: 10000, weight: 0.3, applies_if: {rain: true},
+               rationale: "10,000 mm is a widely used minimum for a waterproof shell."}
+        - category: midlayer
+          importance: recommended
+          rationale: Warm layer for stops and cooler hours.
+        - category: backpack
+          importance: essential
+          rationale: Carry water, food and layers.
+          preferences:
+            - {field: capacity_l, op: gte, value: 20, weight: 0.4, rationale: "Day-hike capacity."}
+            - {field: capacity_l, op: gte, value: 40, weight: 0.3, applies_if: {duration_hours_at_least: 24},
+               rationale: "Multi-day treks need more volume."}
+            - {field: hip_belt, op: in, value: [padded, removable_padded], weight: 0.3, applies_if: {duration_hours_at_least: 24},
+               rationale: "A padded hip belt carries heavier multi-day loads."}
+      general_notes:
+        - "Carry water, food, sun protection, a map/navigation means, a headtorch and a first-aid kit."
+
+  # ------------------------------------------------------------------------------------------
+  - key: trail_running
+    version: 2
+    name_en: Trail running
+    name_es: Trail running
+    review_status: pending_expert_review
+    definition:
+      description_en: Running on mountain trails, including races with mandatory kit.
+      description_es: Carrera por senderos de montaña, incluidas carreras con material obligatorio.
+      context_questions: [rain, snow, duration_hours]
+      needs:
+        - category: trail_running_shoe
+          importance: essential
+          rationale: Grip and protection on trails.
+          preferences:
+            - {field: lug_depth_mm, op: gte, value: 4, weight: 0.5, rationale: "Deeper lugs grip better on loose or muddy ground."}
+            - {field: terrain, op: contains_any, value: [technical, mud], weight: 0.5, rationale: "Shoes declared for technical or muddy terrain."}
+        - category: hardshell_jacket
+          importance: recommended
+          rationale: >-
+            Light waterproof layer for changing weather; mandatory in most mountain races (with hood and
+            taped seams).
+          preferences:
+            - {field: waterproof_rating_mm, op: gte, value: 10000, weight: 0.3,
+               rationale: "UTMB-series rules recommend a minimum of 10,000 Schmerber (mm)."}
+            - {field: breathability_ret, op: lte, value: 12.9, weight: 0.2,
+               rationale: "UTMB-series rules recommend a RET below 13."}
+            - {field: hood, op: in, value: [fixed, stowable, helmet_compatible], weight: 0.2,
+               rationale: "Race rules require an integrated or attached hood."}
+            - {field: weight_g, op: lte, value: 300, weight: 0.3, rationale: "Running shells should be very light."}
+        - category: midlayer
+          importance: recommended
+          applies_if: {duration_hours_at_least: 6}
+          rationale: Warm layer for long races or bad weather.
+          preferences:
+            - {field: weight_g, op: gte, value: 180, weight: 1.0,
+               rationale: "Long UTMB-series races require a warm long-sleeved top of at least 180 g (men's M)."}
+        - category: backpack
+          importance: recommended
+          applies_if: {duration_hours_at_least: 3}
+          rationale: A running vest or small pack to carry water and mandatory kit.
+          preferences:
+            - {field: capacity_l, op: lte, value: 15, weight: 0.5, rationale: "Running vests are usually 5-15 L."}
+            - {field: weight_g, op: lte, value: 400, weight: 0.5, rationale: "Light carry for running."}
+      general_notes:
+        - "Race regulations define mandatory kit (jacket with hood and taped seams, warm layer, headtorch, survival blanket...): always check the organizer's list."
+        - "Long races require waterproof gloves, a beanie, a headtorch (200 lumens in UTMB-series races) and a minimum water capacity."
+      references:
+        - "UTMB World Series - UTS Event Rules v4.0: waterproof jacket min. recommended 10,000 Schmerber, RET below 13, hood, sealed seams; warm layer min. 180 g. https://res.cloudinary.com/utmb-world/image/upload/v1705659355/snowdonia/UTS_by_UTMB_Event_Rules_V4_0_6c3f79f0d6.pdf.pdf"
+        - "UTMB - Verbier equipment advice (waterproof jacket details). https://verbier.utmb.world/races-runners/runners/equipment-advices"

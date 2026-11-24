@@ -1,0 +1,555 @@
+# Registry of brands and sources (version-controlled). Validate / apply with:
+#   python manage.py import_sources --check
+#   python manage.py import_sources
+#
+# Listing a brand or source here does NOT imply any agreement, technical access or permission.
+# A source can only be enabled with access_status `authorized` or `terms_permit` (validated here,
+# in code and by a database CHECK constraint). robots.txt permissions are recorded as technical
+# facts only: they do not grant reuse rights. Details: docs/source-evaluation.md.
+#
+# Brand fields after `integration_status` (country, verified_at, robots, sitemaps, evidence, notes)
+# document the evaluation and are not stored in the database. `candidate_sources` lists data routes
+# without an adapter yet (documentation only).
+version: 1
+reviewed_at: 2026-11-24
+
+brands:
+  # --- Footwear --------------------------------------------------------------------------------
+  - name: La Sportiva
+    official_domain: lasportiva.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: IT
+    specialties: [footwear]
+    integration_status: evaluating
+    robots: "Product paths allowed; query strings (/*?) and several locales disallowed; per-locale sitemaps."
+    sitemaps: [https://www.lasportiva.com/media/sitemap/es/sitemap.xml, https://www.lasportiva.com/media/sitemap/en/sitemap.xml]
+    evidence: [https://www.lasportiva.com/robots.txt, https://www.lasportiva.com/en/privacy-policy-la-sportiva]
+    notes: "La Sportiva S.p.A. (Ziano di Fiemme). The North American entity publishes separate terms (personal, limited use)."
+  - name: Scarpa
+    official_domain: scarpa.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: IT
+    specialties: [footwear]
+    integration_status: evaluating
+    robots: "Shopify storefront; product pages allowed for generic crawlers; contains comments addressed to AI agents (untrusted content)."
+    sitemaps: [https://scarpa.com/sitemap.xml]
+    evidence: [https://www.scarpa.com/robots.txt, https://scarpa.com/pages/terms-and-conditions]
+    notes: "Calzaturificio S.C.A.R.P.A. S.p.A. Published terms found cover sales (GTCS); website-use terms not reviewed."
+  - name: Salewa
+    official_domain: salewa.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: IT
+    specialties: [footwear, apparel, technical_hardware]
+    robots: "No rule blocks product pages; filter parameters, search, checkout and some locale prefixes blocked; no AI-specific rules."
+    sitemaps: [https://www.salewa.com/es-es-sitemap.xml, https://www.salewa.com/sitemap_index.xml]
+    evidence: [https://www.salewa.com/robots.txt]
+  - name: Bestard
+    official_domain: bestard.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: ES
+    specialties: [footwear]
+    evidence: [https://bestard.com/gb/info/la-empresa-22]
+    notes: "Calzados Bestard S.A., Lloseta (Mallorca); robots.txt not reviewed."
+  - name: Lowa
+    official_domain: lowa.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: DE
+    specialties: [footwear]
+    robots: "Disallows */catalog/product/view/ (raw product URLs) and category/search paths; only SEO product URLs from sitemaps are crawlable."
+    sitemaps: [https://lowa.com/media/sitemap/sitemap_en.xml, https://lowa.com/media/sitemap/sitemap_de.xml]
+    evidence: [https://www.lowa.com/robots.txt]
+  - name: Asolo
+    official_domain: asolo.com
+    country: IT
+    specialties: [footwear]
+    notes: "Domain not verified: the site could not be fetched during the 2026-11-24 review."
+  # --- Technical hardware ------------------------------------------------------------------------
+  - name: Petzl
+    official_domain: petzl.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: FR
+    specialties: [technical_hardware]
+    integration_status: evaluating
+    robots: "Demandware paths, search, cart, account and filter/ID parameters blocked; per-country sitemap indexes."
+    sitemaps: [https://www.petzl.com/int/en/sitemap_index.xml]
+    evidence: [https://www.petzl.com/robots.txt, https://www.petzl.com/INT/en/legal]
+    notes: "Legal notice: content for private, personal, non-commercial use; reproduction without written consent prohibited."
+  - name: Grivel
+    official_domain: grivel.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: IT
+    specialties: [technical_hardware]
+    robots: "Shopify; generic crawlers allowed; explicit Allow: / for Google-Extended, CCBot, anthropic-ai, Claude-Web, PerplexityBot and others."
+    sitemaps: [https://grivel.com/sitemap.xml]
+    evidence: [https://www.grivel.com/robots.txt, https://grivel.com/blogs/news/grivel-binding-systems]
+    notes: "Key for crampon/axe data. A permissive robots.txt is not a licence; terms of use not found during the review."
+  - name: Black Diamond
+    official_domain: blackdiamondequipment.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: US
+    specialties: [technical_hardware, poles]
+    robots: "Shopify; product pages allowed; no AI-specific rules."
+    sitemaps: [https://blackdiamondequipment.com/sitemap.xml]
+    evidence: [https://www.blackdiamondequipment.com/robots.txt]
+  - name: CAMP
+    official_domain: camp.it
+    country: IT
+    specialties: [technical_hardware]
+    notes: "Domain not verified: the site requires JavaScript and returned no content during the review."
+  # --- Apparel ----------------------------------------------------------------------------------
+  - name: Arc'teryx
+    official_domain: arcteryx.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: CA
+    specialties: [apparel, packs]
+    robots: "Product pages allowed; a named AI-crawler group (GPTBot, ClaudeBot, etc.) gets the same rules plus Allow: /; URLs with commas blocked."
+    sitemaps: [https://arcteryx.com/sitemap.xml]
+    evidence: [https://arcteryx.com/robots.txt]
+  - name: Altus
+    official_domain: wearealtus.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: ES
+    specialties: [apparel, packs, technical_hardware]
+    evidence: [https://wearealtus.com/en, https://wearealtus.com/en/pagina/where-we-come-from]
+    notes: "Spanish brand (since 1945); also sold through the Decathlon marketplace. robots.txt not reviewed."
+  - name: Rab
+    official_domain: rab.equipment
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: GB
+    specialties: [apparel]
+    robots: "No Sitemap directive; catalog/search, checkout and some product drafts blocked per locale."
+    evidence: [https://rab.equipment/robots.txt]
+  - name: Mammut
+    official_domain: mammut.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: CH
+    specialties: [apparel, technical_hardware, packs]
+    robots: "Allow: /; blocks size/colour variants and technical-attribute filter paths (weight, water column, insulation...)."
+    sitemaps: [https://www.mammut.com/sitemap.xml]
+    evidence: [https://www.mammut.com/robots.txt]
+  - name: The North Face
+    official_domain: thenorthface.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: US
+    specialties: [apparel]
+    robots: "No rule targets product pages; filters, search, cart and reviews blocked."
+    sitemaps: [https://www.thenorthface.com/sitemap.xml]
+    evidence: [https://www.thenorthface.com/robots.txt]
+  - name: Patagonia
+    official_domain: patagonia.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: US
+    specialties: [apparel]
+    robots: "Product pages not blocked; Google-Extended and GoogleOther disallowed site-wide (signal against AI reuse)."
+    sitemaps: [https://www.patagonia.com/sitemap_index.xml]
+    evidence: [https://www.patagonia.com/robots.txt]
+  - name: Montane
+    official_domain: montane.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: GB
+    specialties: [apparel]
+    robots: "Shopify; /products/ allowed; contains comments addressed to AI agents (untrusted content, ignored)."
+    sitemaps: [https://montane.com/sitemap.xml]
+    evidence: [https://www.montane.com/robots.txt]
+  # --- Packs ------------------------------------------------------------------------------------
+  - name: Ortovox
+    official_domain: ortovox.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: DE
+    specialties: [packs, apparel]
+    integration_status: evaluating
+    robots: "Allow: /; query strings (*/?), account and checkout blocked; per-locale sitemaps."
+    sitemaps: [https://www.ortovox.com/int-en/sitemap.xml]
+    evidence: [https://www.ortovox.com/robots.txt]
+  - name: Osprey
+    official_domain: osprey.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: US
+    specialties: [packs]
+    robots: "Blocks */catalog/* and catalogsearch plus tracking parameters; per-locale sitemaps."
+    sitemaps: [https://www.osprey.com/es/media/sitemap/sitemap_es.xml]
+    evidence: [https://www.osprey.com/robots.txt]
+  - name: Deuter
+    official_domain: deuter.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: DE
+    specialties: [packs]
+    robots: "Allow: /; query strings, account, checkout blocked; per-locale sitemaps."
+    sitemaps: [https://www.deuter.com/es-es/sitemap.xml]
+    evidence: [https://www.deuter.com/robots.txt]
+  - name: Gregory
+    official_domain: gregory.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: US
+    specialties: [packs]
+    evidence: [https://www.gregorypacks.com/robots.txt]
+    notes: "gregorypacks.com redirects (302) to gregory.com; robots.txt of the new domain not reviewed."
+  - name: Ferrino
+    official_domain: ferrino.it
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: IT
+    specialties: [packs, apparel]
+    robots: "Product pages allowed; named AI crawlers get Crawl-delay: 10; no Sitemap directive."
+    evidence: [https://www.ferrino.it/robots.txt]
+  # --- Trail ------------------------------------------------------------------------------------
+  - name: NNormal
+    official_domain: nnormal.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: ES
+    specialties: [trail]
+    robots: "Crawl-delay: 5; search and some parameters blocked."
+    sitemaps: [https://www.nnormal.com/sitemap.xml]
+    evidence: [https://www.nnormal.com/robots.txt]
+  - name: Salomon
+    official_domain: salomon.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: FR
+    specialties: [trail, footwear]
+    robots: "Blocks /*/catalog/product/view/ (raw product URLs); no Sitemap directive."
+    evidence: [https://www.salomon.com/robots.txt]
+  - name: Hoka
+    official_domain: hoka.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: US
+    specialties: [trail]
+    robots: "Blocks variant/quick-view parameters and some trail/road category paths; sitemap index."
+    sitemaps: [https://www.hoka.com/sitemap_index_all.xml]
+    evidence: [https://www.hoka.com/robots.txt]
+  - name: RUMM
+    official_domain: rummclub.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: ES
+    specialties: [trail, apparel]
+    robots: >-
+      WordPress/WooCommerce (Yoast); only add-to-cart parameters and some upload/admin paths blocked; no
+      AI-specific rules. The Sitemap directive points to a third-party domain (pixelwisestudio.me), so it
+      is not usable with a rummclub.com allowlist.
+    evidence: [https://rummclub.com/aviso-legal/, https://rummclub.com/robots.txt]
+    notes: >-
+      Rumm Culture SL (Murcia), also the 'RUMM CULTURE' seller on the Decathlon marketplace. Trail-running
+      apparel and accessories (no footwear). The legal notice has no clause on reuse of website content.
+  # --- Poles ------------------------------------------------------------------------------------
+  - name: Leki
+    official_domain: leki.com
+    domain_verified: true
+    verified_at: 2026-11-24
+    country: DE
+    specialties: [poles]
+    robots: "Allow: /; account, checkout, compare and search blocked; per-country sitemaps."
+    sitemaps: [https://leki.com/es/en/sitemap.xml]
+    evidence: [https://www.leki.com/robots.txt]
+
+sources:
+  # Priority order from the specification: boots + crampons first, then packs and apparel.
+  - slug: petzl-website
+    name: Petzl official website (sitemap + JSON-LD)
+    brand: Petzl
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://www.petzl.com/
+    allowed_domains: [www.petzl.com]
+    access_status: restricted
+    terms_reviewed_at: 2026-11-24
+    access_notes: >-
+      Legal notice: site and content for private, personal, non-commercial use; reproduction or
+      distribution without prior written consent is prohibited. Needs written permission or a feed.
+    references: [https://www.petzl.com/INT/en/legal]
+    enabled: false
+    sync_frequency_hours: 168
+    categories: [crampon, ice_axe, climbing_helmet]
+    config:
+      discovery: sitemap
+      sitemap_url: https://www.petzl.com/int/en/sitemap_index.xml
+      url_include: ["/Sport/Crampons/", "/Sport/Ice-axes/", "/Sport/Helmets/"]
+      category_rules:
+        - {pattern: "/Crampons/", category: crampon}
+        - {pattern: "/Ice-axes/", category: ice_axe}
+        - {pattern: "/Helmets/", category: climbing_helmet}
+      max_urls: 200
+
+  - slug: grivel-website
+    name: Grivel official website (Shopify, JSON-LD)
+    brand: Grivel
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://grivel.com/
+    allowed_domains: [grivel.com, www.grivel.com]
+    access_status: unverified
+    access_notes: >-
+      robots.txt explicitly allows several AI crawlers, but no licence for catalog reuse was found.
+      Request permission or a data feed (crampon binding and size data are key for compatibility).
+    references: [https://www.grivel.com/robots.txt]
+    enabled: false
+    sync_frequency_hours: 168
+    categories: [crampon, ice_axe, climbing_helmet]
+    config:
+      discovery: sitemap
+      sitemap_url: https://grivel.com/sitemap.xml
+      url_include: ["/products/"]
+      category_rules:
+        - {pattern: "crampon|g10|g12|g14|g20|g22|air-tech|rambo", category: crampon}
+        - {pattern: "helmet|casco|stealth|salamander|duetto|mutant", category: climbing_helmet}
+      default_category: ice_axe
+      max_urls: 200
+
+  - slug: scarpa-website
+    name: Scarpa official website (Shopify, JSON-LD)
+    brand: Scarpa
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://scarpa.com/
+    allowed_domains: [www.scarpa.com, scarpa.com]
+    access_status: unverified
+    access_notes: >-
+      Shopify storefront; robots.txt allows product pages and lists a sitemap, and contains text
+      addressed to AI agents (treated as untrusted). Website-use terms and database rights not reviewed.
+    references: [https://www.scarpa.com/robots.txt, https://scarpa.com/pages/terms-and-conditions]
+    enabled: false
+    sync_frequency_hours: 168
+    categories: [mountaineering_boot, hiking_boot, trail_running_shoe]
+    config:
+      discovery: sitemap
+      sitemap_url: https://scarpa.com/sitemap.xml
+      url_include: ["/products/"]
+      category_rules:
+        - {pattern: "mont-blanc|phantom|ribelle-tech|ribelle-lite|manta|zodiac-tech|rebel", category: mountaineering_boot}
+        - {pattern: "spin|golden-gate|ribelle-run|ribelle-s", category: trail_running_shoe}
+      default_category: hiking_boot
+      max_urls: 300
+
+  - slug: lasportiva-website
+    name: La Sportiva official website (JSON-LD)
+    brand: La Sportiva
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://www.lasportiva.com/
+    allowed_domains: [www.lasportiva.com]
+    access_status: unverified
+    access_notes: >-
+      robots.txt allows product paths and lists per-locale sitemaps. The US entity grants only a
+      personal, limited privilege to use its websites; terms for the EU site not found.
+    references: [https://www.lasportiva.com/robots.txt, https://www.lasportivausa.com/terms-and-conditions]
+    enabled: false
+    sync_frequency_hours: 168
+    categories: [mountaineering_boot, hiking_boot, trail_running_shoe]
+    config:
+      discovery: sitemap
+      sitemap_url: https://www.lasportiva.com/media/sitemap/es/sitemap.xml
+      category_rules:
+        - {pattern: "nepal|g2|g5|g-summit|aequilibrium|trango|olympus", category: mountaineering_boot}
+        - {pattern: "bushido|prodigio|jackal|akasha|mutant|cyklon|kaptiva", category: trail_running_shoe}
+      default_category: hiking_boot
+      max_urls: 300
+
+  - slug: salewa-website
+    name: Salewa official website (JSON-LD)
+    brand: Salewa
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://www.salewa.com/
+    allowed_domains: [www.salewa.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (product pages not blocked; es-es sitemap available).
+    references: [https://www.salewa.com/robots.txt]
+    enabled: false
+    categories: [mountaineering_boot, hiking_boot, crampon, ice_axe]
+    config: {discovery: sitemap, sitemap_url: "https://www.salewa.com/es-es-sitemap.xml", default_category: hiking_boot, max_urls: 200}
+
+  - slug: lowa-website
+    name: Lowa official website (JSON-LD)
+    brand: Lowa
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://lowa.com/
+    allowed_domains: [lowa.com, www.lowa.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (raw /catalog/product/view/ URLs disallowed; use sitemap URLs only).
+    references: [https://www.lowa.com/robots.txt]
+    enabled: false
+    categories: [mountaineering_boot, hiking_boot]
+    config: {discovery: sitemap, sitemap_url: "https://lowa.com/media/sitemap/sitemap_en.xml", default_category: hiking_boot, max_urls: 200}
+
+  - slug: blackdiamond-website
+    name: Black Diamond official website (Shopify, JSON-LD)
+    brand: Black Diamond
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://www.blackdiamondequipment.com/
+    allowed_domains: [blackdiamondequipment.com, www.blackdiamondequipment.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (product pages allowed).
+    references: [https://www.blackdiamondequipment.com/robots.txt]
+    enabled: false
+    categories: [crampon, ice_axe, climbing_helmet]
+    config:
+      discovery: sitemap
+      sitemap_url: https://blackdiamondequipment.com/sitemap.xml
+      url_include: ["/products/"]
+      category_rules:
+        - {pattern: "crampon|sabretooth|serac|contact|cyborg|stinger", category: crampon}
+        - {pattern: "helmet|vapor|vision|half-dome|capitan", category: climbing_helmet}
+      default_category: ice_axe
+      max_urls: 200
+
+  - slug: ortovox-website
+    name: Ortovox official website (JSON-LD)
+    brand: Ortovox
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://www.ortovox.com/
+    allowed_domains: [www.ortovox.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (Allow /; query strings blocked; int-en sitemap).
+    references: [https://www.ortovox.com/robots.txt]
+    enabled: false
+    categories: [backpack, insulated_jacket, midlayer, hardshell_jacket]
+    config: {discovery: sitemap, sitemap_url: "https://www.ortovox.com/int-en/sitemap.xml", default_category: backpack, max_urls: 200}
+
+  - slug: deuter-website
+    name: Deuter official website (JSON-LD)
+    brand: Deuter
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://www.deuter.com/
+    allowed_domains: [www.deuter.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (Allow /; es-es sitemap).
+    references: [https://www.deuter.com/robots.txt]
+    enabled: false
+    categories: [backpack]
+    config: {discovery: sitemap, sitemap_url: "https://www.deuter.com/es-es/sitemap.xml", default_category: backpack, max_urls: 200}
+
+  - slug: osprey-website
+    name: Osprey official website (JSON-LD)
+    brand: Osprey
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://www.osprey.com/
+    allowed_domains: [www.osprey.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (*/catalog/* blocked; confirm product URL structure first).
+    references: [https://www.osprey.com/robots.txt]
+    enabled: false
+    categories: [backpack]
+    config: {discovery: sitemap, sitemap_url: "https://www.osprey.com/es/media/sitemap/sitemap_es.xml", default_category: backpack, max_urls: 200}
+
+  - slug: mammut-website
+    name: Mammut official website (JSON-LD)
+    brand: Mammut
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://www.mammut.com/
+    allowed_domains: [www.mammut.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (technical-attribute filter paths blocked; product pages allowed).
+    references: [https://www.mammut.com/robots.txt]
+    enabled: false
+    categories: [hardshell_jacket, insulated_jacket, midlayer, backpack, climbing_helmet]
+    config: {discovery: sitemap, sitemap_url: "https://www.mammut.com/sitemap.xml", default_category: hardshell_jacket, max_urls: 200}
+
+  - slug: arcteryx-website
+    name: Arc'teryx official website (JSON-LD)
+    brand: Arc'teryx
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://arcteryx.com/
+    allowed_domains: [arcteryx.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (product pages allowed for generic and named AI crawlers).
+    references: [https://arcteryx.com/robots.txt]
+    enabled: false
+    categories: [hardshell_jacket, insulated_jacket, midlayer, backpack]
+    config: {discovery: sitemap, sitemap_url: "https://arcteryx.com/sitemap.xml", default_category: hardshell_jacket, max_urls: 200}
+
+  - slug: montane-website
+    name: Montane official website (Shopify, JSON-LD)
+    brand: Montane
+    source_type: manufacturer_website
+    adapter: jsonld_product
+    base_url: https://montane.com/
+    allowed_domains: [montane.com, www.montane.com]
+    access_status: unverified
+    access_notes: Not evaluated beyond robots.txt (Shopify; contains AI-agent-directed comments, ignored).
+    references: [https://www.montane.com/robots.txt]
+    enabled: false
+    categories: [hardshell_jacket, insulated_jacket, midlayer, trail_running_shoe]
+    config: {discovery: sitemap, sitemap_url: "https://montane.com/sitemap.xml", url_include: ["/products/"], default_category: hardshell_jacket, max_urls: 200}
+
+  - slug: operator-structured-import
+    name: Authorized structured dataset delivered to the operator
+    source_type: structured_file
+    adapter: structured_file
+    access_status: unverified
+    access_notes: Template. Set access_status=authorized only for datasets with documented permission.
+    enabled: false
+    config: {path: imports/products.json}
+
+candidate_sources:
+  - name: Bergfreunde ES product feed (Awin)
+    kind: distributor_affiliate_feed
+    url: https://ui.awin.com/merchant-profile/125904
+    provides: [prices, availability, identifiers]
+    route: "Awin affiliate programme with daily product data feeds (up to ~270,000 products)."
+    status: requires_agreement
+    notes: >-
+      Feeds are licensed to approved affiliates under programme terms that assume tracked links.
+      Affiliation is out of scope for this project: only usable with an explicit data agreement.
+    references: [https://ui.awin.com/merchant-profile/125904]
+  - name: Deporvillage ES (Awin)
+    kind: distributor_affiliate_feed
+    url: https://ui.awin.com/merchant-profile/76932
+    provides: [prices, availability]
+    route: "Awin affiliate programme; product feed availability not confirmed."
+    status: requires_agreement
+    notes: "Programme terms (NL) state offers must come through Awin and cannot be taken from the website."
+    references: [https://ui.awin.com/merchant-profile/76932, https://ui.awin.com/merchant-profile/121218]
+  - name: Barrabés
+    kind: distributor_website
+    url: https://www.barrabes.com/
+    provides: [prices, availability]
+    route: "No public feed or affiliate programme found; contact the retailer for a data agreement."
+    status: to_evaluate
+  - name: Snowleader
+    kind: distributor_affiliate_feed
+    url: https://www.snowleader.com/
+    provides: [prices, availability]
+    route: "Affiliate campaign listed on Cuelinks (CPC); no product-feed terms found."
+    status: to_evaluate
+    references: [https://www.cuelinks.com/campaigns/snowleader-affiliate-program]
+  - name: GS1 GDSN data pools
+    kind: industry_data_pool
+    provides: [identifiers, specifications]
+    route: "Brands may publish GTIN-level master data to certified data pools; access requires a trading-partner agreement."
+    status: requires_agreement
+    references: [https://www.watts.com/resources/electronic-data-services/data-sync-and-gdsn]
+  - name: EOG/BSI Sustainability Data Exchange (SDEX)
+    kind: industry_data_pool
+    provides: [sustainability]
+    route: "Standardised product-level sustainability data between outdoor brands and retailers."
+    status: out_of_scope
+    notes: "Sustainability attributes are not in the MVP taxonomy."
+    references: [https://www.ecotextile.com/2023062030845/features/digital-data-exchange.html]

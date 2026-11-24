@@ -1,0 +1,22 @@
+{
+  "_comment": "SYNTHETIC pair-level statements for the demo catalog. Not real manufacturer declarations.",
+  "assertions": [
+    {
+      "relation": "boot_crampon",
+      "product_a": "example-outdoor-alpine-gtx-example",
+      "product_b": "demo-peaks-ice-lever-12",
+      "verdict": "compatible",
+      "declared_by": "Demo Peaks (synthetic fit list)",
+      "conditions": "Adjust the linking bar to the boot sole length before use.",
+      "source_url": "https://example.com/synthetic/demo-peaks-fit-list"
+    },
+    {
+      "relation": "boot_crampon",
+      "product_a": "demo-peaks-trek-winter-lite",
+      "product_b": "demo-peaks-ice-lever-12",
+      "verdict": "compatible",
+      "declared_by": "Demo Peaks (synthetic fit list, contradicts the boot declaration on purpose)",
+      "source_url": "https://example.com/synthetic/demo-peaks-fit-list"
+    }
+  ]
+}
