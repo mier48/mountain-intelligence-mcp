@@ -437,14 +437,17 @@ Si la marca publica especificaciones como `additionalProperty` en su JSON-LD, ma
 ```bash
 cd /opt/mountain-intelligence-mcp
 git pull
+git log --oneline -1                     # comprueba que es el commit que esperas
+docker compose up -d --build --wait      # obligatorio: la imagen incluye data/ y el código
 docker compose exec mountain-intelligence-mcp python manage.py import_sources --check   # valida el YAML
 docker compose exec mountain-intelligence-mcp python manage.py import_sources           # aplica
 docker compose exec mountain-intelligence-mcp python manage.py list_sources
 ```
 
-`import_sources` aplica el YAML como fuente de verdad: los cambios de estado se hacen en el YAML (o se
-perderán en la siguiente importación). Si la imagen copia `data/` en lugar de montarla, ejecuta antes
-`docker compose up -d --build --wait`.
+La imagen Docker copia `data/` (y el código) al construirse, así que tras cada `git pull` hay que
+reconstruir; si no, `import_sources` sigue leyendo el YAML anterior. `import_sources` aplica el YAML como
+fuente de verdad: los cambios de estado se hacen en el YAML (o se perderán en la siguiente importación).
+Antes del `git pull`, los cambios deben estar subidos a GitHub (`git push` desde tu PC).
 
 ### 3. Probar sin guardar nada
 
