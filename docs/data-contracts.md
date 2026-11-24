@@ -65,7 +65,8 @@ saber por qué cambió un dato.
 ## Identidad e idempotencia
 
 - `SourceRecord(source, external_id)` único; `external_id` = URL canónica descubierta (sin parámetros,
-  fragmento, prefijo de idioma ni ruta de colección; ver `ingestion/discovery.py`). Si la canonicalización
+  fragmento ni ruta de colección; ver `ingestion/discovery.py`; las copias por idioma se evitan leyendo solo
+  los sitemaps del idioma principal, porque las tiendas pueden traducir los *handles*). Si la canonicalización
   cambia, los registros antiguos se re-identifican (`rekeyed`) conservando producto, ETag e historial.
   Se guarda el hash SHA-256 del contrato validado: mismo hash ⇒ `unchanged` sin escrituras de catálogo.
 - Variantes: GTIN → SKU → id externo → talla+color dentro del producto. Colores y tallas de una misma ficha

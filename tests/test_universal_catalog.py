@@ -74,15 +74,26 @@ def test_uncategorized_category_row_exists_after_migrate():
     ("raw", "expected"),
     [
         ("https://Shop.test/products/x", "https://shop.test/products/x"),
-        ("https://shop.test/en/products/x", "https://shop.test/products/x"),
-        ("https://shop.test/es-es/products/x/", "https://shop.test/products/x"),
+        ("https://shop.test/products/x/", "https://shop.test/products/x"),
         ("https://shop.test/collections/mochilas/products/x?variant=1#top", "https://shop.test/products/x"),
-        ("https://shop.test/en/collections/c/products/x", "https://shop.test/products/x"),
+        ("https://shop.test/en/products/x", "https://shop.test/en/products/x"),  # never invented by default
         ("https://shop.test/es/es/shop/mens/jacket", "https://shop.test/es/es/shop/mens/jacket"),
     ],
 )
-def test_canonicalize_url_collapses_locales_paths_and_parameters(raw, expected):
+def test_canonicalize_url_collapses_paths_and_parameters(raw, expected):
     assert canonicalize_url(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("https://shop.test/en/products/x", "https://shop.test/products/x"),
+        ("https://shop.test/es-es/products/x/", "https://shop.test/products/x"),
+        ("https://shop.test/en/collections/c/products/x", "https://shop.test/products/x"),
+    ],
+)
+def test_locale_prefix_stripping_is_opt_in(raw, expected):
+    assert canonicalize_url(raw, {"strip_locale_prefix": True}) == expected
 
 
 def test_canonical_host_option():
@@ -135,9 +146,20 @@ def store_pages(handles: tuple[str, ...] = ("ridge-w-fleece", "summit-30-mochila
             )
         ),
         # /en/ copies, a collection-scoped path and a parameterized URL all collapse into one item each
-        f"{ORIGIN}/sitemap_products_1.xml?from=1&to=9": xml(urlset(ORIGIN + "/", *products)),
+        f"{ORIGIN}/sitemap_products_1.xml?from=1&to=9": xml(
+            urlset(
+                ORIGIN + "/",
+                *products,
+                f"{products[0]}?variant=91001",
+                f"{ORIGIN}/collections/mochilas/products/summit-30-mochila",
+            )
+        ),
         f"{ORIGIN}/en/sitemap_products_1.xml?from=1&to=9": xml(
-            urlset(*(p.replace("/products/", "/en/products/") for p in products), f"{products[0]}?variant=91001")
+            urlset(
+                *(p.replace("/products/", "/en/products/") for p in products),
+                f"{products[0]}?variant=91001",
+                f"{ORIGIN}/en/products/translated-handle-only",  # Shopify Markets translated handle
+            )
         ),
         f"{ORIGIN}/sitemap_collections_1.xml": xml(urlset(f"{ORIGIN}/collections/mochilas")),
         f"{ORIGIN}/collections/mochilas/products.json?limit=250&page=1": httpx2.Response(
@@ -211,7 +233,7 @@ def test_sitemap_discovery_finds_every_product_once_without_keyword_filters():
     )
     cfg = {
         "sitemap_url": f"{ORIGIN}/sitemap.xml",
-        "sitemap_include": [r"sitemap_products_\d+\.xml"],
+        "sitemap_include": [r"^https://shop\.test/sitemap_products_\d+\.xml"],
         "product_url_patterns": [r"^https://shop\.test/products/[^/.]+$"],
         "max_urls": 100,
     }
@@ -221,10 +243,23 @@ def test_sitemap_discovery_finds_every_product_once_without_keyword_filters():
         f"{ORIGIN}/products/ridge-w-fleece",
         f"{ORIGIN}/products/summit-30-mochila",
     ]
-    assert result.complete and result.duplicates_collapsed == 4
+    assert result.complete and result.duplicates_collapsed == 2
+    assert not any("/en/" in url for url in log)  # locale copies are not read
     assert result.items[0].lastmod == "2026-11-20"
     assert not any("sitemap_pages" in url for url in log)  # non-product sitemaps are not read
     assert f"{ORIGIN}/sitemap_collections_1.xml" in result.other_sitemaps
+
+
+@pytest.mark.django_db
+def test_shopify_reads_only_primary_locale_sitemaps_and_never_invents_urls():
+    """Regression (Altus 2026-11-24): /en/products/<translated handle> minus the prefix is a 404."""
+    source = shop_source()
+    log: list[str] = []
+    run = sync(source, store_pages(), log)
+    assert run.status == IngestionRun.Status.SUCCEEDED and run.metrics["errors"] == 0
+    assert not any("/en/" in url for url in log)
+    assert not any("translated-handle-only" in url for url in log)
+    assert run.metrics["discovered"] == 3
 
 
 @pytest.mark.django_db
@@ -444,9 +479,12 @@ def test_truncated_runs_never_flag_missing_products():
     source = shop_source()
     pages = store_pages()
     sync(source, pages)
-    # the product disappears from the sitemaps, but one child sitemap cannot be read
+    # the product disappears from the sitemaps, but one product sitemap cannot be read
     shrunk = store_pages(("ridge-w-fleece", "summit-30-mochila"))
-    shrunk[f"{ORIGIN}/en/sitemap_products_1.xml?from=1&to=9"] = httpx2.Response(500)
+    shrunk[f"{ORIGIN}/sitemap.xml"] = xml(
+        sitemap_index(f"{ORIGIN}/sitemap_products_1.xml?from=1&amp;to=9", f"{ORIGIN}/sitemap_products_2.xml")
+    )
+    shrunk[f"{ORIGIN}/sitemap_products_2.xml"] = httpx2.Response(500)
     run = sync(source, shrunk)
     assert not run.discovery_complete and not run.catalog_complete
     assert run.status == IngestionRun.Status.INCOMPLETE and run.metrics["missing"] == 0
@@ -509,7 +547,7 @@ def test_legacy_record_ids_are_rekeyed_to_canonical_urls():
     sync(source, store_pages())
     record = SourceRecord.objects.get(external_id=f"{ORIGIN}/products/domo-2p")
     product_id = record.product_id
-    SourceRecord.objects.filter(pk=record.pk).update(external_id=f"{ORIGIN}/en/products/domo-2p/", etag="")
+    SourceRecord.objects.filter(pk=record.pk).update(external_id=f"{ORIGIN}/products/domo-2p/?utm_source=x", etag="")
     run = sync(source, store_pages())
     assert run.metrics["rekeyed"] == 1 and run.metrics["missing"] == 0
     record.refresh_from_db()

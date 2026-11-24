@@ -601,7 +601,9 @@ sources:
     categories: []   # unrestricted: the whole manufacturer catalog
     config:
       sitemap_url: https://wearealtus.com/sitemap.xml   # index -> products / pages / collections (+ /en/ copies)
-      sitemap_include: ['sitemap_products_\d+\.xml']    # /en/ product sitemap collapses into the same URLs
+      # Primary (Spanish) product sitemaps only: the /en/ copies use translated handles
+      # (/en/products/110x8-polyamide-chisel) that do not exist without the prefix.
+      sitemap_include: ['^https://wearealtus\.com/sitemap_products_\d+\.xml']
       product_url_patterns: ['^https://wearealtus\.com/products/[^/.]+$']
       canonical_host: wearealtus.com
       max_urls: 20000

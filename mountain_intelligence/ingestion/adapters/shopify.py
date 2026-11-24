@@ -1,8 +1,11 @@
 """Reusable adapter for manufacturer storefronts running on Shopify.
 
-Discovery reads the store's product sitemaps (every product page, no keyword filters) and
-canonicalizes URLs so language copies (``/en/products/x``), collection paths and parameters collapse
-into one item per product. For each product it reads the public storefront product JSON
+Discovery reads the store's product sitemaps of the PRIMARY locale (every product page, no keyword
+filters) and canonicalizes URLs so collection paths and parameters collapse into one item per
+product. Locale copies (``/en/sitemap_products_1.xml``) are not read: Shopify stores may translate
+handles per language (``/en/products/polyamide-chisel`` vs ``/products/cincel-poliamida``), so a
+translated URL cannot be mapped to the primary one by stripping the prefix, and the primary
+sitemap already lists every product once. For each product it reads the public storefront product JSON
 (``/products/<handle>.js``), which carries the data the HTML only shows partially: product type,
 tags, vendor, options, every variant with SKU, barcode (GTIN), price and availability, and images.
 Optionally it also reads the product page's schema.org JSON-LD (technical ``additionalProperty``
@@ -11,7 +14,8 @@ values, manufacturer category) and the store's collection memberships.
 Source config keys (all optional):
 
 - ``sitemap_url``: defaults to ``<base_url>/sitemap.xml``
-- ``sitemap_include``: child sitemaps to read (default: product sitemaps ``sitemap_products_``)
+- ``sitemap_include``: child sitemaps to read (default: primary-locale product sitemaps
+  ``^https?://[^/]+/sitemap_products_\\d+\\.xml``)
 - ``product_url_patterns``: default ``^https?://[^/]+/products/[^/.]+$``
 - ``url_exclude``: URLs to drop (e.g. gift cards)
 - ``max_urls`` (default 20000) / ``max_sitemaps`` (default 50): safety caps; hitting one makes
@@ -140,7 +144,7 @@ class ShopifyProductAdapter:
             if not base:
                 raise AdapterError("shopify adapter requires config.sitemap_url or the source base_url")
             cfg["sitemap_url"] = f"{base}/sitemap.xml"
-        cfg.setdefault("sitemap_include", [r"sitemap_products_\d+\.xml"])
+        cfg.setdefault("sitemap_include", [r"^https?://[^/]+/sitemap_products_\d+\.xml"])
         cfg.setdefault("product_url_patterns", [DEFAULT_PRODUCT_PATTERN])
         cfg.setdefault("max_urls", 20000)
         cfg.setdefault("max_sitemaps", 50)

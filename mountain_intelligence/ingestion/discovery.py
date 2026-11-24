@@ -10,9 +10,10 @@ by category keywords or commercial names: scoping by category happens after extr
   ``^https://shop\\.test/products/[^/]+$``). ``url_include`` (legacy) behaves the same way.
 - ``url_exclude``: regexes of URLs to drop (e.g. gift cards).
 
-Every URL is canonicalized before de-duplication (see :func:`canonicalize_url`), so language copies
-(``/en/products/x``), collection-scoped paths (``/collections/c/products/x``), query strings
-(``?variant=1``) and trailing slashes collapse into one item.
+Every URL is canonicalized before de-duplication (see :func:`canonicalize_url`), so collection-scoped
+paths (``/collections/c/products/x``), query strings (``?variant=1``) and trailing slashes collapse
+into one item. Language copies are best avoided by reading only the primary-locale sitemaps
+(``sitemap_include``): stores may translate handles, so stripping a locale prefix is opt-in.
 
 Completeness is explicit: the result says whether discovery covered the whole catalog. It is
 ``False`` when a child sitemap could not be read, the sitemap document budget ran out or the URL
@@ -67,8 +68,9 @@ def canonicalize_url(url: str, cfg: dict[str, Any] | None = None) -> str:
 
     - scheme and host lower-cased (``canonical_host`` can force one host, e.g. drop ``www.``);
     - query string and fragment removed (``?variant=``, tracking parameters);
-    - locale prefix removed (``/en/products/x`` -> ``/products/x``); disable with
-      ``strip_locale_prefix: false`` or customize with ``locale_prefix_pattern``;
+    - locale prefix removed only with ``strip_locale_prefix: true`` (``/en/products/x`` ->
+      ``/products/x``; customize with ``locale_prefix_pattern``). Off by default: with translated
+      handles the stripped URL is a different, usually missing, page;
     - collection-scoped product paths collapsed (``/collections/c/products/x`` -> ``/products/x``);
     - trailing slash removed.
     """
@@ -77,7 +79,7 @@ def canonicalize_url(url: str, cfg: dict[str, Any] | None = None) -> str:
     scheme = (parts.scheme or "https").lower()
     host = (cfg.get("canonical_host") or parts.netloc).lower()
     path = re.sub(r"/{2,}", "/", parts.path or "/")
-    if cfg.get("strip_locale_prefix", True):
+    if cfg.get("strip_locale_prefix", False):
         pattern = cfg.get("locale_prefix_pattern") or DEFAULT_LOCALE_PREFIX
         path = re.sub(pattern, "", path, count=1, flags=re.IGNORECASE)
     if cfg.get("collapse_collection_paths", True):

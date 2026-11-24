@@ -429,8 +429,9 @@ productos:
   descarta (`out_of_scope`).
 
 `altus-website` es la primera fuente de catálogo completo. Usa el adaptador **`shopify_product`**
-(reutilizable para cualquier tienda Shopify): lee los sitemaps de productos, colapsa duplicados por idioma
-(`/en/products/x`), colección (`/collections/c/products/x`), parámetros (`?variant=`) y barra final, y por
+(reutilizable para cualquier tienda Shopify): lee los sitemaps de productos del idioma principal (las copias
+`/en/` pueden usar *handles* traducidos que no existen sin el prefijo, así que no se leen), colapsa duplicados
+por colección (`/collections/c/products/x`), parámetros (`?variant=`) y barra final, y por
 cada producto lee el JSON público del escaparate (`/products/<handle>.js`): variantes, SKU, código de barras,
 precio, disponibilidad, imágenes, tipo, etiquetas. Opcionalmente añade el JSON-LD de la ficha (`jsonld: true`),
 las líneas `Nombre: valor` de la descripción (`description_attributes: true`; la descripción en sí no se
@@ -443,7 +444,7 @@ guarda) y la pertenencia a colecciones como señal de clasificación (`collectio
     categories: []                              # sin restricción: todo el catálogo
     config:
       sitemap_url: https://wearealtus.com/sitemap.xml
-      sitemap_include: ['sitemap_products_\d+\.xml']
+      sitemap_include: ['^https://wearealtus\.com/sitemap_products_\d+\.xml']   # solo el idioma principal
       product_url_patterns: ['^https://wearealtus\.com/products/[^/.]+$']
       batch_size: 250                           # lotes por ejecución; el siguiente lote continúa
       capture_offers: true
