@@ -450,6 +450,8 @@ perderán en la siguiente importación). Si la imagen copia `data/` en lugar de 
 
 ```bash
 docker compose exec mountain-intelligence-mcp python manage.py sync_source arcteryx-website --dry-run --max-items 5
+docker compose exec mountain-intelligence-mcp python manage.py sync_source altus-website --dry-run --max-items 5
+
 ```
 
 Ejecuta todo el pipeline con 5 fichas y deshace los cambios. Revisa las métricas (`discovered`, `new`,
