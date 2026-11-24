@@ -2,7 +2,7 @@
 
 ## Superficie expuesta
 
-- Única interfaz de negocio: MCP. Las ocho tools son de solo lectura, no aceptan URLs para descargar y no
+- Única interfaz de negocio: MCP. Las nueve tools son de solo lectura, no aceptan URLs para descargar y no
   modifican el catálogo. Toda escritura pasa por la CLI y los workers.
 - HTTP: `POST/GET/DELETE /mcp` (Streamable HTTP, sin estado) y `GET /healthz` (sin autenticación, solo
   `{"status": "ok" | "unavailable"}`). PostgreSQL y Redis no se publican y están en una red Docker interna.

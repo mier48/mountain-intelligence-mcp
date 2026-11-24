@@ -94,6 +94,19 @@ class ListCategoriesResult(Envelope):
     data: CategoriesData
 
 
+class BrandInfo(BaseModel):
+    name: str = Field(description="Brand name; use it in search_products `brands`")
+    slug: str
+    official_domain: str | None = None
+    published_products: int = Field(description="Published products (in `category` when it was given)")
+    categories: list[str] = Field(description="Category slugs with published products from this brand")
+    synthetic: bool = Field(description="True for SYNTHETIC demo brands (not real)")
+
+
+class ListBrandsResult(Envelope):
+    data: list[BrandInfo]
+
+
 class ProductSummary(BaseModel):
     product_id: str
     brand: str

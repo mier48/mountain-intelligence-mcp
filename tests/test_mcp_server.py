@@ -12,6 +12,7 @@ pytestmark = pytest.mark.django_db(transaction=True)
 
 EXPECTED_TOOLS = {
     "list_categories",
+    "list_brands",
     "search_products",
     "get_product",
     "compare_products",
@@ -79,8 +80,33 @@ def test_empty_scope_reports_insufficient_data(reference_data, settings):
     assert "empty" in r.structured_content["warnings"][0]
 
 
+def test_list_brands(demo_catalog):
+    sc = call("list_brands", {}).structured_content
+    names = [b["name"] for b in sc["data"]]
+    assert names == sorted(names) and "Example Outdoor" in names
+    assert sc["status"] == "partial" and "SYNTHETIC" in sc["warnings"][0]
+    assert sc["coverage"]["matched_products"] == sum(b["published_products"] for b in sc["data"]) > 0
+    crampons = call("list_brands", {"category": "crampon"}).structured_content["data"]
+    assert crampons and all("crampon" in b["categories"] for b in crampons)
+    assert call("list_brands", {"category": "kayak"}).is_error
+
+
+def test_list_brands_hides_synthetic_and_keeps_empty_brands(demo_catalog, settings):
+    from mountain_intelligence.catalog.services import get_or_create_brand
+
+    get_or_create_brand("Real Brand", official_domain="real-brand.example")
+    settings.MI_INCLUDE_SYNTHETIC_DATA = False
+    sc = call("list_brands", {}).structured_content
+    assert [b["name"] for b in sc["data"]] == ["Real Brand"]
+    assert sc["data"][0]["published_products"] == 0 and sc["data"][0]["official_domain"] == "real-brand.example"
+    assert sc["status"] == "insufficient_data" and "empty" in sc["warnings"][0]
+    sc = call("list_brands", {"category": "crampon"}).structured_content
+    assert sc["data"] == [] and sc["status"] == "insufficient_data"
+
+
 def test_every_tool_end_to_end(demo_catalog):
     assert call("list_categories", {"activity": "winter_mountaineering"}).structured_content["data"]["categories"]
+    assert call("list_brands", {}).structured_content["data"]
     assert call("get_product", {"product_id": "example-outdoor-alpine-gtx-example"}).structured_content["data"]
     assert call(
         "compare_products",

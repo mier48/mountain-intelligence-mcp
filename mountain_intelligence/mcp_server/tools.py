@@ -1,4 +1,4 @@
-"""MCP server definition: the eight read-only tools.
+"""MCP server definition: the nine read-only tools.
 
 Tools are synchronous functions; the SDK runs them in worker threads, where Django's ORM is
 safe to use (no event loop in that thread). Connections are recycled around each call.
@@ -29,6 +29,7 @@ from mountain_intelligence.recommendations.profiles import Conditions
 
 from .schemas import (
     ActivityRequirementsResult,
+    BrandInfo,
     CategoriesData,
     CategoryInfo,
     CategorySlug,
@@ -37,6 +38,7 @@ from .schemas import (
     Coverage,
     EquipmentListResult,
     FieldInfo,
+    ListBrandsResult,
     ListCategoriesResult,
     Meta,
     OwnedItem,
@@ -52,7 +54,7 @@ INSTRUCTIONS = """\
 Mountain Intelligence: read-only technical catalog of mountain/outdoor equipment (boots, crampons,
 packs, shells...). Use the tools instead of guessing specifications.
 
-Workflow: list_categories (fields, units, operators) -> search_products / get_product ->
+Workflow: list_categories (fields, units, operators) / list_brands -> search_products / get_product ->
 compare_products, recommend_products, check_compatibility, get_activity_requirements,
 build_equipment_list. Answers are structured and traceable (sources, dates, evidence status).
 
@@ -175,6 +177,40 @@ def build_server() -> MCPServer:
             )
 
         return _run(body, "list_categories")
+
+    @mcp.tool(annotations=READ_ONLY, title="List brands")
+    def list_brands(
+        category: Annotated[
+            CategorySlug | None,  # type: ignore[valid-type]
+            Field(description="Optional: only brands with published products in this category"),
+        ] = None,
+    ) -> ListBrandsResult:
+        """List the brands in the catalog with their published product count and the categories they cover.
+        Without `category` it also lists registered brands that have no published products yet. Use the
+        returned `name` in the `brands` argument of search_products."""
+
+        def body() -> ListBrandsResult:
+            items = queries.list_brands(category=category)
+            warnings: list[str] = []
+            total = sum(i["published_products"] for i in items)
+            if any(i["synthetic"] for i in items):
+                warnings.append("includes SYNTHETIC demo brands, not real ones")
+            if total == 0:
+                warnings.append(
+                    f"no published products in {category}"
+                    if category
+                    else "the published catalog is empty for this scope"
+                )
+            return ListBrandsResult(
+                status="insufficient_data" if total == 0 else _status(warnings),
+                data=[BrandInfo(**i) for i in items],
+                warnings=warnings,
+                meta=_meta(),
+                coverage=Coverage(catalog_scope=_scope(), matched_products=total),
+                pagination=Pagination(total=len(items)),
+            )
+
+        return _run(body, "list_brands")
 
     @mcp.tool(annotations=READ_ONLY, title="Search products")
     def search_products(

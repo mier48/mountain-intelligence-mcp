@@ -1,4 +1,4 @@
-"""Read-only catalog queries: structured search, product detail and comparison.
+"""Read-only catalog queries: structured search, product detail, comparison and brand listing.
 
 All inputs are validated against the category taxonomy; no client-provided ORM lookups or
 field names reach the database without passing through an allowlist.
@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from django.conf import settings
 from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramWordSimilarity
-from django.db.models import Case, F, FloatField, IntegerField, Q, QuerySet, Value, When
+from django.db.models import Case, Count, F, FloatField, IntegerField, Q, QuerySet, Value, When
 from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Cast
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from mountain_intelligence.offers.services import comparable_price_eur, current_offers
 from mountain_intelligence.sources.models import SourceRecord, SpecificationEvidence
 
-from .models import Product, ProductVariant
+from .models import Brand, Product, ProductVariant
 from .normalization import FieldIssue, fold, normalize_value
 from .services import coverage, find_by_identifier, freshness, spec_value, tokens, visible_products
 from .synonyms import STOPWORDS, expand
@@ -171,6 +171,38 @@ def resolve_brands(brands: list[str]) -> list[str]:
     from .services import brand_slug
 
     return [brand_slug(b) for b in brands[:20] if b.strip()]
+
+
+def list_brands(*, category: str | None = None, include_synthetic: bool | None = None) -> list[dict[str, Any]]:
+    """Registered brands with their published product counts per category, ordered by name.
+
+    Without `category` every brand is listed, including those with no published products yet (the
+    catalog scope is part of the answer). With `category` only brands that have products there.
+    """
+    include_synthetic = settings.MI_INCLUDE_SYNTHETIC_DATA if include_synthetic is None else include_synthetic
+    if category and category not in CATEGORIES:
+        raise QueryValidationError(f"unknown category {category!r}")
+    counts: dict[int, dict[str, int]] = {}
+    rows = visible_products(include_synthetic).order_by().values("brand_id", "category__slug").annotate(n=Count("pk"))
+    for row in rows:
+        counts.setdefault(row["brand_id"], {})[row["category__slug"]] = row["n"]
+    brands = Brand.objects.all() if include_synthetic else Brand.objects.filter(is_synthetic=False)
+    items = []
+    for brand in brands.order_by("name"):
+        by_category = counts.get(brand.pk, {})
+        if category and category not in by_category:
+            continue
+        items.append(
+            {
+                "name": brand.name,
+                "slug": brand.slug,
+                "official_domain": brand.official_domain or None,
+                "published_products": by_category[category] if category else sum(by_category.values()),
+                "categories": sorted(by_category),
+                "synthetic": brand.is_synthetic,
+            }
+        )
+    return items
 
 
 def search_products(

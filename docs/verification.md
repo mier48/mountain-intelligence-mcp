@@ -12,7 +12,7 @@ httpx2 2.16.2, selectolax 1.0.2 (lexbor), Starlette 1.10.0, uvicorn 0.54.0.
 | `manage.py makemigrations --check` | sin cambios pendientes |
 | Migraciones desde base vacía + `seed_demo_data` | OK; segunda ejecución: 34 `unchanged`, 0 nuevos |
 | `pytest` | **145 pruebas superadas** y 1 opcional omitida (integración con fuente real, `-m live_source`) (≈33 s) |
-| Protocolo MCP real, stdio | cliente oficial del SDK lanza `python -m mountain_intelligence.mcp_server stdio`: `initialize` (modo `legacy`) y descubrimiento moderno (`auto`), `tools/list` (8) y `tools/call` |
+| Protocolo MCP real, stdio | cliente oficial del SDK lanza `python -m mountain_intelligence.mcp_server stdio`: `initialize` (modo `legacy`) y descubrimiento moderno (`auto`), `tools/list` (9) y `tools/call` |
 | Protocolo MCP real, Streamable HTTP | servidor uvicorn en subproceso: mismos flujos con token; sin token/erróneo ⇒ 401; `Host` ajeno ⇒ 421/400; `Origin` ajeno ⇒ 403; sin tokens configurados el servidor no arranca |
 | Docker Compose (ver nota) | `docker compose up --wait`: los 5 servicios `healthy` y `migrate` con salida 0; `import_sources`, `seed_demo_data`, tarea Celery encolada con `sync_source --async` y procesada por el worker; `tools/call` vía `curl` con token; 401 sin token; `pg_dump`/`pg_restore` verificados (34 productos restaurados) |
 

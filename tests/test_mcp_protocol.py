@@ -49,7 +49,7 @@ def wait_for_other_sessions_to_close(timeout: float = 10.0) -> None:
 
 async def exercise(client: Client) -> None:
     tools = await client.list_tools()
-    assert len(tools.tools) == 8
+    assert len(tools.tools) == 9
     result = await client.call_tool("search_products", {"query": "botas alpinismo", "limit": 3})
     assert not result.is_error and result.structured_content["data"]
     result = await client.call_tool(

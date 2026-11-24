@@ -32,7 +32,7 @@ datos estructurados, reproducibles y con procedencia. No necesita ninguna clave 
 
 Monolito modular en Python 3.13. Django 5.2 LTS se usa solo para ORM, migraciones, configuración y comandos
 de gestión (sin servidor HTTP de Django). El SDK oficial de MCP (v2.3, `MCPServer`) sirve stdio y Streamable
-HTTP sobre las mismas ocho herramientas. PostgreSQL es la fuente de verdad (búsqueda de texto nativa + GIN +
+HTTP sobre las mismas nueve herramientas. PostgreSQL es la fuente de verdad (búsqueda de texto nativa + GIN +
 trigramas, especificaciones en JSONB validadas con Pydantic). Celery + Redis ejecutan la ingesta programada.
 
 ```
@@ -287,7 +287,7 @@ curl -s -o /dev/null -w '%{http_code}\n' $URL/            # 404: nada más está
 
 curl -s $URL/mcp \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'    # lista las 8 herramientas (sin token: acceso público)
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'    # lista las 9 herramientas (sin token: acceso público)
 ```
 
 Con `MCP_ALLOW_UNAUTHENTICATED=false`, la misma petición sin token devuelve `401`; añade
@@ -316,7 +316,7 @@ administrador):
 5. Acepta el aviso de riesgo, elige **Create as a plugin** e **instálalo**; después actívalo en la
    conversación en la que quieras usarlo.
 
-Las 8 herramientas declaran `readOnlyHint`, así que ChatGPT las trata como de solo lectura y no pide la
+Las 9 herramientas declaran `readOnlyHint`, así que ChatGPT las trata como de solo lectura y no pide la
 confirmación que exige a las acciones de escritura.
 
 **Claude (claude.ai / app de escritorio)**: añade un conector personalizado con la misma URL y sin
@@ -493,6 +493,7 @@ Todas son de solo lectura (`readOnlyHint: true`), validan la entrada con esquema
 | Tool | Para qué |
 |---|---|
 | `list_categories` | Categorías, campos filtrables (tipo, unidad canónica, operadores, valores) y perfiles de actividad |
+| `list_brands` | Marcas del catálogo con su número de productos publicados y las categorías que cubren; filtrable por categoría |
 | `search_products` | Texto es/en (sinónimos, SKU/MPN/GTIN) + filtros tipados `eq/in/gte/lte/contains…`, paginación estable |
 | `get_product` | Ficha completa: cada campo con unidad y evidencias (URL, fecha, estado), variantes, ofertas, fuentes |
 | `compare_products` | Matriz homogénea de 2–5 productos, desconocidos explícitos y limitaciones (peso por unidad/par, RET vs MVTR…) |
