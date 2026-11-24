@@ -7,7 +7,7 @@
 2. **Revisión experta de perfiles de actividad** (`winter_mountaineering`, `winter_hiking`, `hiking_trekking`,
    `trail_running`) y de la regla bota/crampón; publicar nuevas versiones con `reviewed_by/reviewed_at`.
 3. **OAuth 2.1 para MCP** (servidor de autorización, `TokenVerifier` del SDK, metadatos RFC 9728) para clientes
-   que solo aceptan conectores OAuth.
+   que solo aceptan conectores OAuth (p. ej. restringir el acceso de ChatGPT, hoy en modo público).
 4. Verificar el despliegue con las imágenes oficiales (job `docker` de la CI) y fijar digests de imagen.
 
 ## P1 — Calidad del catálogo

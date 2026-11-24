@@ -2,7 +2,10 @@
 
 Authentication (MVP): static bearer tokens configured through MCP_AUTH_TOKENS and compared in
 constant time. This is a private-deployment mechanism for known clients; it is NOT the MCP OAuth
-2.1 authorization flow and must not be presented as universally interoperable. See docs/security.md.
+2.1 authorization flow and must not be presented as universally interoperable. With
+MCP_ALLOW_UNAUTHENTICATED=true the endpoint is public (read-only tools, rate limited) so that
+clients that only offer OAuth or "no authentication" (ChatGPT, claude.ai) can connect.
+See docs/security.md.
 """
 
 from __future__ import annotations
@@ -131,10 +134,10 @@ async def healthz(_: Request) -> JSONResponse:
 def build_http_app(mcp: MCPServer) -> Starlette:
     if not settings.MCP_AUTH_TOKENS and not settings.MCP_ALLOW_UNAUTHENTICATED:
         raise RuntimeError(
-            "Refusing to start: set MCP_AUTH_TOKENS (or MCP_ALLOW_UNAUTHENTICATED=true for local development only)"
+            "Refusing to start: set MCP_AUTH_TOKENS (or MCP_ALLOW_UNAUTHENTICATED=true for a public endpoint)"
         )
     if settings.MCP_ALLOW_UNAUTHENTICATED:
-        logger.warning("MCP HTTP endpoint running WITHOUT authentication (development only)")
+        logger.warning("MCP HTTP endpoint is PUBLIC: running without authentication (MCP_ALLOW_UNAUTHENTICATED)")
     security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=settings.MCP_ALLOWED_HOSTS,

@@ -90,8 +90,10 @@ Los precios del catálogo demo se fechan en el momento de la carga y caducan a l
 
 ## Despliegue en VPS (mountain-mcp.ltrapi.com)
 
-Resultado: `https://mountain-mcp.ltrapi.com/mcp` con HTTPS automático (Let's Encrypt), autenticación por token
-y solo los puertos 80/443 abiertos. Lo añaden dos ficheros sobre el `compose.yaml` base:
+Resultado: `https://mountain-mcp.ltrapi.com/mcp` con HTTPS automático (Let's Encrypt), **acceso público sin
+autenticación** (para que ChatGPT y los conectores de claude.ai puedan usarlo; ver
+[«Acceso público o con token»](#acceso-público-o-con-token)) y solo los puertos 80/443 abiertos.
+Lo añaden dos ficheros sobre el `compose.yaml` base:
 
 | Fichero | Qué hace |
 |---|---|
@@ -179,7 +181,7 @@ cd /opt/mountain-intelligence-mcp
 cp .env.example .env
 chmod 600 .env
 openssl rand -hex 32   # → POSTGRES_PASSWORD
-openssl rand -hex 32   # → MCP_AUTH_TOKENS (uno por cliente, separados por comas)
+openssl rand -hex 32   # → MCP_AUTH_TOKENS (obligatorio para Compose aunque el acceso sea público)
 nano .env
 ```
 
@@ -190,8 +192,8 @@ COMPOSE_FILE=compose.yaml:compose.prod.yaml
 MCP_PUBLIC_DOMAIN=mountain-mcp.ltrapi.com
 POSTGRES_PASSWORD=<primer valor generado>
 MCP_AUTH_TOKENS=<segundo valor generado>
-MCP_ALLOW_UNAUTHENTICATED=false
-MCP_ALLOWED_ORIGINS=
+MCP_ALLOW_UNAUTHENTICATED=true
+MCP_ALLOWED_ORIGINS=https://chatgpt.com,https://claude.ai
 INGESTION_USER_AGENT=MountainIntelligenceBot/0.1 (+https://mountain-mcp.ltrapi.com; contacto: <tu email>)
 MI_INCLUDE_SYNTHETIC_DATA=false
 ```
@@ -199,6 +201,12 @@ MI_INCLUDE_SYNTHETIC_DATA=false
 - `COMPOSE_FILE` hace que cualquier `docker compose …` ejecutado en esta carpeta use el overlay de producción
   (no hace falta repetir `-f`).
 - `MCP_ALLOWED_HOSTS` y `FORWARDED_ALLOW_IPS` los fija `compose.prod.yaml`; no hace falta tocarlos.
+- `MCP_ALLOW_UNAUTHENTICATED=true` deja el endpoint **abierto**: cualquiera que conozca la URL puede llamar a
+  las herramientas (todas de solo lectura). Lo limitan el rate limit por IP, el tamaño máximo de petición y el
+  `statement_timeout` de PostgreSQL. Para cerrarlo, ponlo a `false` y `docker compose up -d`: a partir de ese
+  momento solo entran clientes con un token de `MCP_AUTH_TOKENS` (ChatGPT dejará de poder conectarse).
+- `MCP_ALLOWED_ORIGINS` solo actúa si el cliente envía cabecera `Origin`; incluir ChatGPT y claude.ai evita
+  rechazos `403` si lo hacen.
 - **Catálogo:** mientras no haya fuentes reales autorizadas, el catálogo real está vacío y las herramientas
   responden `not_found`/`insufficient_data`. Para una instancia de demostración pon
   `MI_INCLUDE_SYNTHETIC_DATA=true` y carga `seed_demo_data` (paso 6): las respuestas incluirán productos
@@ -269,41 +277,68 @@ La verificación del paso 7 es la misma.
 
 ### 7. Verificar
 
-Desde cualquier máquina con `bash` (en el VPS sirve; usa el token de `MCP_AUTH_TOKENS`):
+Desde cualquier máquina con `bash` (en el VPS sirve):
 
 ```bash
-TOKEN='<tu token>'
 URL=https://mountain-mcp.ltrapi.com
 
 curl -s $URL/healthz                                    # {"status": "ok"}
-curl -s -o /dev/null -w '%{http_code}\n' $URL/mcp -X POST   # 401: sin token se rechaza
 curl -s -o /dev/null -w '%{http_code}\n' $URL/            # 404: nada más está expuesto
 
 curl -s $URL/mcp \
-  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'    # lista las 8 herramientas
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'    # lista las 8 herramientas (sin token: acceso público)
 ```
+
+Con `MCP_ALLOW_UNAUTHENTICATED=false`, la misma petición sin token devuelve `401`; añade
+`-H "Authorization: Bearer $TOKEN"`.
 
 Desde Windows PowerShell:
 
 ```powershell
-$Token = '<tu token>'
 Invoke-RestMethod https://mountain-mcp.ltrapi.com/healthz
 $body = '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 (Invoke-RestMethod https://mountain-mcp.ltrapi.com/mcp -Method Post -Body $body -ContentType 'application/json' `
-  -Headers @{ Authorization = "Bearer $Token"; Accept = 'application/json, text/event-stream' }).result.tools.name
+  -Headers @{ Accept = 'application/json, text/event-stream' }).result.tools.name
 ```
 
 ### 8. Conectar los clientes
 
+URL del servidor para cualquier cliente: **`https://mountain-mcp.ltrapi.com/mcp`** (transporte Streamable HTTP).
+
+**ChatGPT** (web; la disponibilidad depende del plan y, en espacios de trabajo, de los permisos que fije el
+administrador):
+
+1. Abre [chatgpt.com/plugins](https://chatgpt.com/plugins), pulsa **+** y elige **Add custom MCP server**.
+2. Nombre: `Mountain Intelligence`; descripción opcional (p. ej. «Catálogo técnico de material de montaña»).
+3. En **Connection** → **Server URL**: `https://mountain-mcp.ltrapi.com/mcp`.
+4. **Authentication**: **No authentication**.
+5. Acepta el aviso de riesgo, elige **Create as a plugin** e **instálalo**; después actívalo en la
+   conversación en la que quieras usarlo.
+
+Las 8 herramientas declaran `readOnlyHint`, así que ChatGPT las trata como de solo lectura y no pide la
+confirmación que exige a las acciones de escritura.
+
+**Claude (claude.ai / app de escritorio)**: añade un conector personalizado con la misma URL y sin
+autenticación (Ajustes → Conectores).
+
+**Claude Code**:
+
 ```bash
-claude mcp add --transport http mountain-intelligence https://mountain-mcp.ltrapi.com/mcp \
-  --header "Authorization: Bearer $MCP_TOKEN"
+claude mcp add --transport http mountain-intelligence https://mountain-mcp.ltrapi.com/mcp
 ```
 
-o en `.mcp.json` (detalles en [Conectar un cliente MCP](#conectar-un-cliente-mcp)). Usa un token distinto por
-cliente o persona: para revocar uno, quítalo de `MCP_AUTH_TOKENS` y ejecuta `docker compose up -d`.
+o en `.mcp.json` (detalles en [Conectar un cliente MCP](#conectar-un-cliente-mcp)).
+
+#### Acceso público o con token
+
+| `MCP_ALLOW_UNAUTHENTICATED` | Quién puede conectarse | Clientes compatibles |
+|---|---|---|
+| `true` (este despliegue) | Cualquiera con la URL; solo lectura, con rate limit | ChatGPT, claude.ai, Claude Code, Inspector… |
+| `false` | Solo quien envíe `Authorization: Bearer <token>` de `MCP_AUTH_TOKENS` | Claude Code, Inspector, apps propias (no ChatGPT ni claude.ai) |
+
+Para restringir el acceso y seguir usando ChatGPT hace falta OAuth 2.1 (está en el
+[backlog](docs/backlog.md)): ChatGPT solo admite OAuth o «sin autenticación», no tokens fijos.
 
 ### 9. Operación diaria
 
@@ -348,7 +383,8 @@ y `docker compose up -d`.
 | `ports: !reset` o error de sintaxis al leer `compose.prod.yaml` | Compose anterior a v2.24: actualiza Docker (`docker compose version`) |
 | El navegador/curl da error de certificado o `caddy` registra errores ACME | El DNS aún no apunta al VPS, el puerto 80/443 está cerrado (ufw o cortafuegos del proveedor) o el registro está proxificado en Cloudflare. Corrige y `docker compose restart caddy` |
 | `Bind for 0.0.0.0:80 failed: port is already allocated` (o `:443`) | Otro proxy del VPS ya usa el puerto; no lo pares. Si es Traefik, usa `compose.traefik.yaml` ([paso 6b](#6b-si-el-vps-ya-tiene-traefik-en-80443)), que no publica ningún puerto |
-| `401 Unauthorized` | Falta la cabecera `Authorization: Bearer …` o el token no está en `MCP_AUTH_TOKENS` |
+| `401 Unauthorized` | `MCP_ALLOW_UNAUTHENTICATED=false` y falta la cabecera `Authorization: Bearer …` o el token no está en `MCP_AUTH_TOKENS` |
+| ChatGPT no consigue conectar o crear el plugin | Comprueba `tools/list` sin token (paso 7) y revisa `docker compose logs --since 10m mountain-intelligence-mcp` mientras lo intentas: un `401` indica que el acceso público no está activo, un `403` que falta su origen en `MCP_ALLOWED_ORIGINS`, un `421` que la URL no es la del dominio |
 | `421 Misdirected Request` | El `Host` no coincide con `MCP_PUBLIC_DOMAIN` (¿usas otra URL o la IP directamente?) |
 | `403 Forbidden` desde una aplicación web | Su `Origin` no está en `MCP_ALLOWED_ORIGINS` (vacío = solo clientes no navegador) |
 | `429 Too Many Requests` | Límite por IP (`MCP_RATE_LIMIT_PER_MINUTE`); súbelo si varios clientes comparten IP |
@@ -387,8 +423,8 @@ Todas documentadas en [`.env.example`](.env.example). Las más relevantes:
 |---|---|---|
 | `POSTGRES_HOST/PORT/DB/USER/PASSWORD` | `localhost/5432/mountain_intelligence/mountain/—` | Conexión a PostgreSQL |
 | `REDIS_URL`, `CELERY_BROKER_URL` | — / `redis://localhost:6379/0` | Caché de bloqueos y broker Celery |
-| `MCP_AUTH_TOKENS` | vacío | Tokens bearer aceptados por HTTP (obligatorio salvo modo desarrollo) |
-| `MCP_ALLOW_UNAUTHENTICATED` | `false` | Solo desarrollo local; sin token el servidor HTTP se niega a arrancar |
+| `MCP_AUTH_TOKENS` | vacío | Tokens bearer aceptados por HTTP (Compose exige al menos uno; ignorados en modo público) |
+| `MCP_ALLOW_UNAUTHENTICATED` | `false` | `true` = endpoint público sin token (necesario para ChatGPT/claude.ai). Con `false` y sin tokens el servidor HTTP se niega a arrancar |
 | `MCP_ALLOWED_HOSTS` / `MCP_ALLOWED_ORIGINS` | localhost / vacío | Validación de `Host` y `Origin` (anti DNS-rebinding) |
 | `MCP_RATE_LIMIT_PER_MINUTE` | `120` | Límite por IP cliente y proceso |
 | `MI_INCLUDE_SYNTHETIC_DATA` | `false` | Incluir el catálogo demo sintético en las respuestas |
@@ -443,8 +479,9 @@ cabecera `Authorization: Bearer <token>`.
 Compatibilidad verificada: el cliente oficial del SDK de Python (v2.3) sobre stdio y Streamable HTTP, tanto
 con el handshake `initialize` (protocolo 2025-06-18/2025-11-25) como con el descubrimiento moderno
 (`mode="auto"`). La autenticación por token estático **no** es el flujo OAuth de MCP: los clientes que solo
-admiten conectores OAuth (p. ej. conectores personalizados de claude.ai) no pueden usarla todavía
-(ver [docs/security.md](docs/security.md)).
+admiten OAuth o «sin autenticación» (ChatGPT, conectores personalizados de claude.ai) necesitan el modo
+público `MCP_ALLOW_UNAUTHENTICATED=true` (ver [Conectar los clientes](#8-conectar-los-clientes) y
+[docs/security.md](docs/security.md)).
 
 ## Herramientas MCP
 
@@ -527,7 +564,8 @@ programación, y protocolo MCP real en stdio y Streamable HTTP (auth, Host/Origi
 
 - Sin fuentes reales habilitadas: el catálogo publicado real está vacío hasta disponer de permisos o feeds.
 - Los perfiles de actividad están marcados `pending_expert_review`; cada respuesta lo advierte.
-- La autenticación HTTP es por token estático (despliegues privados); OAuth 2.1 de MCP está en el backlog.
+- La autenticación HTTP es por token estático o acceso público; OAuth 2.1 de MCP (necesario para restringir
+  el acceso a ChatGPT) está en el backlog.
 - Rate limiting en memoria por proceso; con varias réplicas usa el proxy inverso o un límite compartido.
 - La compatibilidad bota/crampón nunca sustituye la comprobación física; ninguna herramienta evalúa la
   seguridad de una ruta.

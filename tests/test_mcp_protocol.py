@@ -155,3 +155,32 @@ def test_http_refuses_to_start_without_auth(db):
     )
     assert proc.returncode != 0 and b"MCP_AUTH_TOKENS" in proc.stderr
     wait_for_other_sessions_to_close()
+
+
+def test_public_mode_skips_token_check_but_default_requires_it():
+    from mountain_intelligence.mcp_server.http import BearerAuthMiddleware
+
+    async def run():
+        reached: list[str] = []
+        sent: list[dict] = []
+
+        async def app(scope, receive, send):
+            reached.append(scope["path"])
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        async def receive():
+            return {"type": "http.request", "body": b""}
+
+        async def send(message):
+            sent.append(message)
+
+        scope = {"type": "http", "path": "/mcp", "headers": []}
+        await BearerAuthMiddleware(app, tokens=["secret"], allow_unauthenticated=True)(scope, receive, send)
+        assert reached == ["/mcp"] and sent[0]["status"] == 200
+
+        sent.clear()
+        await BearerAuthMiddleware(app, tokens=["secret"])(dict(scope), receive, send)
+        assert reached == ["/mcp"] and sent[0]["status"] == 401
+
+    anyio.run(run)

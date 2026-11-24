@@ -11,7 +11,13 @@
 
 - `MCP_AUTH_TOKENS`: tokens bearer comparados en tiempo constante sobre su SHA-256. Sin token válido ⇒ `401`
   con `WWW-Authenticate: Bearer`. Si no hay tokens configurados el servidor HTTP **se niega a arrancar**,
-  salvo `MCP_ALLOW_UNAUTHENTICATED=true` (solo desarrollo local; se registra un aviso).
+  salvo `MCP_ALLOW_UNAUTHENTICATED=true`.
+- **Modo público** (`MCP_ALLOW_UNAUTHENTICATED=true`, el usado en `mountain-mcp.ltrapi.com`): no se exige
+  token y se registra un aviso al arrancar. Es necesario para ChatGPT y los conectores de claude.ai, que solo
+  ofrecen OAuth o «sin autenticación». Riesgo aceptado: cualquiera con la URL puede consultar el catálogo.
+  Mitigaciones: tools exclusivamente de lectura, sin URLs ni escrituras, rate limit por IP, cuerpo ≤ 1 MB en
+  Caddy y 256 KiB en la app, `statement_timeout`, límites de tamaño en todas las entradas y validación de
+  `Host`/`Origin`. Con varios usuarios de ChatGPT, las peticiones llegan desde IP de OpenAI y comparten límite.
 - Es un mecanismo para despliegues privados con clientes que permiten cabeceras (Claude Code, Inspector,
   aplicaciones propias). **No** es la autorización OAuth 2.1 de la especificación MCP ni es interoperable con
   clientes que solo admiten conectores OAuth. Para una integración pública: implementar `TokenVerifier` +
